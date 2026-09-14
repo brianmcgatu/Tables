@@ -563,7 +563,22 @@
               <div id="singleTables" class="tables" aria-label="Select multiplication tables"></div>
             </div>
 
+            <!-- New End Condition Toggle -->
             <div class="field">
+              <label class="field-label">Session end condition</label>
+              <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <label class="player-option" style="flex:1;">
+                  <input type="radio" name="spEndMode" value="time" checked>
+                  <span>Time Limit</span>
+                </label>
+                <label class="player-option" style="flex:1;">
+                  <input type="radio" name="spEndMode" value="questions">
+                  <span>Fixed Questions</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="field" id="spTimeField">
               <label class="field-label" for="duration">Session duration (seconds)</label>
               <input id="duration" type="text" value="60"
                      inputmode="numeric" pattern="[0-9]*"
@@ -571,6 +586,13 @@
               <p id="durationHelp" class="helper" style="margin:7px 0 0;">
                 Enter any whole-number duration, in seconds.
               </p>
+            </div>
+
+            <div class="field hidden" id="spQuestionsField">
+              <label class="field-label" for="spQuestionLimit">Target number of questions</label>
+              <input id="spQuestionLimit" type="text" value="20"
+                     inputmode="numeric" pattern="[0-9]*"
+                     autocomplete="off">
             </div>
 
             <div class="field">
@@ -668,7 +690,7 @@
             <span id="singleElapsed" class="hud-value">0.0s</span>
           </div>
           <div class="hud-item">
-            <span class="hud-label">Remaining</span>
+            <span id="singleRemainingLabel" class="hud-label">Remaining</span>
             <span id="singleRemaining" class="hud-value">60.0s</span>
           </div>
           <div class="hud-item">
@@ -790,12 +812,6 @@
     /* ============================================================
        Times Table Trainer — JavaScript
        ES6+, no framework/library dependencies.
-
-       Timing design:
-       - performance.now() supplies monotonic, high-resolution timestamps.
-       - Single player has an overall session deadline.
-       - Multiplayer starts/stops each player's active clock around
-         question answering only; interstitial handoffs are never timed.
        ============================================================ */
 
     "use strict";
@@ -836,8 +852,11 @@
     let lastQuestion = null;
 
     const state = {
+      deck: [], // New exhaustable deck
       single: {
         selectedTables: [],
+        endMode: "time",
+        questionLimit: 20,
         durationMs: 60000,
         startedAt: 0,
         deadline: 0,
@@ -862,6 +881,21 @@
     };
 
     /* ------------------------------------------------------------
+       Single-Player Toggle Handling
+       ------------------------------------------------------------ */
+    document.querySelectorAll('input[name="spEndMode"]').forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        if(e.target.value === 'time') {
+          $('spTimeField').classList.remove('hidden');
+          $('spQuestionsField').classList.add('hidden');
+        } else {
+          $('spTimeField').classList.add('hidden');
+          $('spQuestionsField').classList.remove('hidden');
+        }
+      });
+    });
+
+    /* ------------------------------------------------------------
        Speech synthesis helper.
        ------------------------------------------------------------ */
     function speakQuestion(a, b) {
@@ -876,7 +910,7 @@
     }
 
     /* ------------------------------------------------------------
-       Generic UI helpers.
+       Generic UI & Data Helpers.
        ------------------------------------------------------------ */
     function setScreen(screen) {
       Object.values(screens).forEach((el) => el.classList.remove("active"));
@@ -886,14 +920,8 @@
 
     function setAccent(color) {
       document.documentElement.style.setProperty("--accent", color);
-      document.documentElement.style.setProperty(
-        "--accent-soft",
-        hexToRgba(color, .08)
-      );
-      document.documentElement.style.setProperty(
-        "--accent-border",
-        hexToRgba(color, .35)
-      );
+      document.documentElement.style.setProperty("--accent-soft", hexToRgba(color, .08));
+      document.documentElement.style.setProperty("--accent-border", hexToRgba(color, .35));
       document.querySelector('meta[name="theme-color"]').setAttribute("content", color);
     }
 
@@ -918,9 +946,51 @@
       return values.reduce((sum, n) => sum + n, 0) / values.length;
     }
 
+    function getPercentile(data, p) {
+      if (data.length === 0) return 0;
+      if (data.length === 1) return data[0];
+      const index = (data.length - 1) * p;
+      const lower = Math.floor(index);
+      const upper = lower + 1;
+      const weight = index - lower;
+      if (upper >= data.length) return data[lower];
+      return data[lower] * (1 - weight) + data[upper] * weight;
+    }
+
+    function generateBoxplotHTML(times, maxScale = null, color = 'var(--accent)', softColor = 'var(--accent-soft)') {
+      if (!times || times.length < 3) return `<p class="helper">Requires at least 3 answers for a distribution boxplot.</p>`;
+      const sorted = [...times].sort((a, b) => a - b);
+      const min = sorted[0];
+      const max = sorted[sorted.length - 1];
+      const q1 = getPercentile(sorted, 0.25);
+      const median = getPercentile(sorted, 0.5);
+      const q3 = getPercentile(sorted, 0.75);
+
+      const scaleMin = 0; 
+      const scaleMax = maxScale !== null ? maxScale : max;
+      const range = scaleMax - scaleMin;
+      const scale = (val) => Math.max(0, Math.min(100, ((val - scaleMin) / (range || 1)) * 100));
+
+      return `
+        <div style="margin-top: 5px;">
+          <div style="position:relative; height: 24px; margin: 10px 0;">
+            <div style="position:absolute; top: 11px; left: ${scale(min)}%; right: ${100 - scale(max)}%; border-top: 2px dashed ${color}; opacity: 0.5;"></div>
+            <div style="position:absolute; top: 4px; height: 16px; width: 2px; background: ${color}; left: ${scale(min)}%;"></div>
+            <div style="position:absolute; top: 4px; height: 16px; background: ${softColor}; border: 1px solid ${color}; left: ${scale(q1)}%; width: ${scale(q3) - scale(q1)}%;"></div>
+            <div style="position:absolute; top: 4px; height: 16px; width: 2px; background: var(--danger); left: ${scale(median)}%; z-index:2;"></div>
+            <div style="position:absolute; top: 4px; height: 16px; width: 2px; background: ${color}; left: ${scale(max)}%;"></div>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-size: 11px; color: var(--muted); font-weight: 700;">
+            <span>Min: ${formatSeconds(min,1)}</span>
+            <span>Med: ${formatSeconds(median,1)}</span>
+            <span>Max: ${formatSeconds(max,1)}</span>
+          </div>
+        </div>
+      `;
+    }
+
     function getTrend(times) {
       if (times.length < 2) return "Not enough data";
-
       const mid = Math.floor(times.length / 2);
       const first = average(times.slice(0, mid));
       const second = average(times.slice(mid));
@@ -938,7 +1008,6 @@
 
     function longestAverageQuestion(records) {
       const groups = new Map();
-
       records.forEach((r) => {
         const key = `${r.a} × ${r.b}`;
         if (!groups.has(key)) groups.set(key, []);
@@ -954,29 +1023,32 @@
       return best;
     }
 
-    function pick(array) {
-      return array[Math.floor(Math.random() * array.length)];
+    /* ------------------------------------------------------------
+       Deck System Helpers (Exhaustive & Without 1x).
+       ------------------------------------------------------------ */
+    function generateDeck(tables) {
+      const deck = [];
+      const selected = Array.isArray(tables) && tables.length ? tables : [2];
+      selected.forEach(a => {
+        // Feature 2: Omit 1s by starting at b = 2
+        for (let b = 2; b <= 12; b++) {
+          deck.push({ a, b, answer: a * b });
+        }
+      });
+      // Feature 3: Exhaustive shuffled deck pool
+      for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+      }
+      return deck;
     }
 
     function newQuestion(tables) {
-      const selected = Array.isArray(tables) && tables.length ? tables : [2];
-      let q;
-      let attempts = 0;
-
-      do {
-        const a = pick(selected);
-        const b = Math.floor(Math.random() * 12) + 1;
-        q = { a, b, answer: a * b };
-        attempts++;
-      } while (
-        lastQuestion &&
-        q.a === lastQuestion.a &&
-        q.b === lastQuestion.b &&
-        (selected.length > 1 || attempts < 12)
-      );
-
-      lastQuestion = q;
-      return q;
+      if (!state.deck || state.deck.length === 0) {
+        state.deck = generateDeck(tables);
+      }
+      lastQuestion = state.deck.pop();
+      return lastQuestion;
     }
 
     function initials(name) {
@@ -1010,18 +1082,14 @@
             selectAll.checked = selectedArray.length === TABLES.length;
             updateUI();
           });
-
           container.appendChild(button);
         });
-
         selectAll.checked = selectedArray.length === TABLES.length;
       }
 
       selectAll.addEventListener("change", () => {
         selectedArray.length = 0;
-        if (selectAll.checked) {
-          selectedArray.push(...TABLES);
-        }
+        if (selectAll.checked) selectedArray.push(...TABLES);
         updateUI();
       });
 
@@ -1031,7 +1099,6 @@
     function renderPlayers() {
       const list = $("playerList");
       list.innerHTML = "";
-
       PLAYER_PROFILES.forEach((player, index) => {
         const label = document.createElement("label");
         label.className = "player-option";
@@ -1104,6 +1171,7 @@
       state.single.answered = 0;
       state.single.records = [];
       state.single.questionAnswered = false;
+      state.deck = []; // Reset deck
       lastQuestion = null;
     }
 
@@ -1115,16 +1183,30 @@
 
       resetSingleState();
 
-      const durationSeconds = Number($("duration").value.trim());
-      if (!Number.isInteger(durationSeconds) || durationSeconds < 1) {
-        alert("Session duration must be a whole number of seconds greater than 0.");
-        $("duration").focus();
-        return;
-      }
+      state.single.endMode = document.querySelector('input[name="spEndMode"]:checked').value;
 
-      state.single.durationMs = durationSeconds * 1000;
-      state.single.startedAt = performance.now();
-      state.single.deadline = state.single.startedAt + state.single.durationMs;
+      if (state.single.endMode === "time") {
+        const durationSeconds = Number($("duration").value.trim());
+        if (!Number.isInteger(durationSeconds) || durationSeconds < 1) {
+          alert("Session duration must be a whole number of seconds greater than 0.");
+          $("duration").focus();
+          return;
+        }
+        state.single.durationMs = durationSeconds * 1000;
+        state.single.startedAt = performance.now();
+        state.single.deadline = state.single.startedAt + state.single.durationMs;
+        $("singleRemainingLabel").textContent = "Remaining";
+      } else {
+        const questionLimit = Number($("spQuestionLimit").value.trim());
+        if (!Number.isInteger(questionLimit) || questionLimit < 1) {
+          alert("Target questions must be a whole number greater than 0.");
+          $("spQuestionLimit").focus();
+          return;
+        }
+        state.single.questionLimit = questionLimit;
+        state.single.startedAt = performance.now();
+        $("singleRemainingLabel").textContent = "Goal";
+      }
 
       $("singleFeedback").textContent = "";
       $("singleFeedback").className = "feedback";
@@ -1139,17 +1221,22 @@
 
     function updateSingleClock() {
       const now = performance.now();
-      const elapsed = Math.min(now - state.single.startedAt, state.single.durationMs);
-      const remaining = Math.max(0, state.single.deadline - now);
-
+      const elapsed = now - state.single.startedAt;
+      
       $("singleElapsed").textContent = formatSeconds(elapsed);
-      $("singleRemaining").textContent = formatSeconds(remaining);
       $("singleScore").textContent = `${state.single.score} / ${state.single.answered}`;
-      $("singleProgress").style.width =
-        `${Math.min(100, elapsed / state.single.durationMs * 100)}%`;
 
-      if (remaining <= 0) {
-        endSingleSession("Time expired");
+      if (state.single.endMode === "time") {
+        const cappedElapsed = Math.min(elapsed, state.single.durationMs);
+        const remaining = Math.max(0, state.single.deadline - now);
+        $("singleRemaining").textContent = formatSeconds(remaining);
+        $("singleProgress").style.width = `${Math.min(100, cappedElapsed / state.single.durationMs * 100)}%`;
+        if (remaining <= 0) {
+          endSingleSession("Time expired");
+        }
+      } else {
+        $("singleRemaining").textContent = `${state.single.answered} / ${state.single.questionLimit}`;
+        $("singleProgress").style.width = `${Math.min(100, state.single.answered / state.single.questionLimit * 100)}%`;
       }
     }
 
@@ -1161,16 +1248,12 @@
       state.single.questionAnswered = false;
 
       $("singleQuestionNumber").textContent = `Question ${state.single.questionNo}`;
-      $("singleQuestion").textContent =
-        `${state.single.question.a} × ${state.single.question.b}`;
+      $("singleQuestion").textContent = `${state.single.question.a} × ${state.single.question.b}`;
       $("singleAnswer").value = "";
       $("singleFeedback").textContent = "";
       $("singleFeedback").className = "feedback";
 
-      if ($("singleSpeech").checked) {
-        speakQuestion(state.single.question.a, state.single.question.b);
-      }
-
+      if ($("singleSpeech").checked) speakQuestion(state.single.question.a, state.single.question.b);
       requestAnimationFrame(() => $("singleAnswer").focus());
     }
 
@@ -1187,7 +1270,6 @@
 
     $("singleAnswerForm").addEventListener("submit", (event) => {
       event.preventDefault();
-
       if (!screens.singleGame.classList.contains("active")) return;
 
       const input = $("singleAnswer");
@@ -1207,14 +1289,9 @@
         state.single.questionAnswered = true;
         state.single.score += 1;
         recordSingleQuestion(elapsed, "correct", state.single.attempt);
-
-        $("singleFeedback").textContent =
-          state.single.attempt === 1 ? "Correct! ✓" : "Correct on the second attempt! ✓";
+        $("singleFeedback").textContent = state.single.attempt === 1 ? "Correct! ✓" : "Correct on the second attempt! ✓";
         $("singleFeedback").className = "feedback correct";
-
-        setTimeout(() => {
-          if (screens.singleGame.classList.contains("active")) nextSingleQuestion();
-        }, 180);
+        handleSingleAdvance();
         return;
       }
 
@@ -1227,30 +1304,32 @@
       } else {
         state.single.questionAnswered = true;
         recordSingleQuestion(elapsed, "incorrect", 2);
-        $("singleFeedback").textContent =
-          `Answer: ${state.single.question.answer}`;
+        $("singleFeedback").textContent = `Answer: ${state.single.question.answer}`;
         $("singleFeedback").className = "feedback reveal";
-
-        setTimeout(() => {
-          if (screens.singleGame.classList.contains("active")) nextSingleQuestion();
-        }, 700);
+        handleSingleAdvance(true);
       }
     });
 
+    function handleSingleAdvance(wasRevealed = false) {
+      const delay = wasRevealed ? 700 : 180;
+      setTimeout(() => {
+        if (!screens.singleGame.classList.contains("active")) return;
+        if (state.single.endMode === "questions" && state.single.answered >= state.single.questionLimit) {
+          endSingleSession("Questions completed");
+        } else {
+          nextSingleQuestion();
+        }
+      }, delay);
+    }
+
     $("quitSingle").addEventListener("click", () => {
-      if (confirm("End this session and view your results?")) {
-        endSingleSession("Session ended early");
-      }
+      if (confirm("End this session and view your results?")) endSingleSession("Session ended early");
     });
 
     function endSingleSession(reason) {
       if (!screens.singleGame.classList.contains("active")) return;
-      if (timerHandle) {
-        clearInterval(timerHandle);
-        timerHandle = null;
-      }
+      if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
 
-      // If timer expired, accept any typed input matching the correct answer
       if (!state.single.questionAnswered && state.single.question) {
         const currentInput = $("singleAnswer").value.trim();
         if (currentInput !== "" && Number(currentInput) === state.single.question.answer) {
@@ -1261,11 +1340,10 @@
         }
       }
 
-      const elapsed = Math.min(
-        performance.now() - state.single.startedAt,
-        state.single.durationMs
-      );
-
+      const elapsed = state.single.endMode === "time"
+        ? Math.min(performance.now() - state.single.startedAt, state.single.durationMs)
+        : performance.now() - state.single.startedAt;
+        
       showSingleSummary(reason, elapsed);
     }
 
@@ -1281,8 +1359,7 @@
       const trend = getTrend(records.map(r => r.timeMs));
 
       $("summaryTitle").textContent = "Single-player results";
-      $("summarySubtitle").textContent =
-        `${reason} • Active session time: ${formatSeconds(elapsedMs)}`;
+      $("summarySubtitle").textContent = `${reason} • Active session time: ${formatSeconds(elapsedMs)}`;
 
       const firstHalf = records.slice(0, Math.ceil(records.length / 2));
       const secondHalf = records.slice(Math.ceil(records.length / 2));
@@ -1296,34 +1373,30 @@
         </div>
 
         <div class="analytics-grid">
+          <article class="analytics-card full">
+            <h3>Boxplot Analytics</h3>
+            <h4 style="margin:15px 0 0;font-size:12px;color:var(--muted);text-transform:uppercase;">Response Time Distribution</h4>
+            ${generateBoxplotHTML(records.map(r => r.timeMs))}
+          </article>
+          
           <article class="analytics-card">
             <h3>Longest single response</h3>
             <p class="insight">
-              ${longest
-                ? `<strong>${longest.a} × ${longest.b}</strong> took <strong>${formatSeconds(longest.timeMs)}</strong>.`
-                : "No completed questions."}
+              ${longest ? `<strong>${longest.a} × ${longest.b}</strong> took <strong>${formatSeconds(longest.timeMs)}</strong>.` : "No completed questions."}
             </p>
           </article>
 
           <article class="analytics-card">
             <h3>Longest average question</h3>
             <p class="insight">
-              ${longestAvg
-                ? `<strong>${longestAvg.question}</strong> averaged
-                   <strong>${formatSeconds(longestAvg.averageMs)}</strong>
-                   across ${longestAvg.count} attempt(s).`
-                : "No completed questions."}
+              ${longestAvg ? `<strong>${longestAvg.question}</strong> averaged <strong>${formatSeconds(longestAvg.averageMs)}</strong> across ${longestAvg.count} attempt(s).` : "No completed questions."}
             </p>
           </article>
 
           <article class="analytics-card full">
             <h3>Speed trend</h3>
             <p class="insight">
-              <strong>${trend}</strong>.
-              First-half average:
-              <strong>${formatSeconds(average(firstHalf.map(r => r.timeMs)))}</strong>.
-              Second-half average:
-              <strong>${formatSeconds(average(secondHalf.map(r => r.timeMs)))}</strong>.
+              <strong>${trend}</strong>. First-half average: <strong>${formatSeconds(average(firstHalf.map(r => r.timeMs)))}</strong>. Second-half average: <strong>${formatSeconds(average(secondHalf.map(r => r.timeMs)))}</strong>.
             </p>
           </article>
 
@@ -1339,23 +1412,12 @@
 
     function renderRecordTable(records) {
       if (!records.length) return `<div class="empty">No completed questions to display.</div>`;
-
       return `
         <div class="table-wrap">
           <table>
-            <thead>
-              <tr><th>#</th><th>Question</th><th>Time</th><th>Attempts</th><th>Result</th></tr>
-            </thead>
+            <thead><tr><th>#</th><th>Question</th><th>Time</th><th>Attempts</th><th>Result</th></tr></thead>
             <tbody>
-              ${records.map((r, i) => `
-                <tr>
-                  <td>${i + 1}</td>
-                  <td>${r.a} × ${r.b}</td>
-                  <td>${formatSeconds(r.timeMs)}</td>
-                  <td>${r.attempts}</td>
-                  <td>${r.result === "correct" ? "Correct" : "Incorrect"}</td>
-                </tr>
-              `).join("")}
+              ${records.map((r, i) => `<tr><td>${i + 1}</td><td>${r.a} × ${r.b}</td><td>${formatSeconds(r.timeMs)}</td><td>${r.attempts}</td><td>${r.result === "correct" ? "Correct" : "Incorrect"}</td></tr>`).join("")}
             </tbody>
           </table>
         </div>
@@ -1366,8 +1428,7 @@
        Multiplayer setup.
        ------------------------------------------------------------ */
     function selectedPlayersFromUI() {
-      const ids = [...$("playerList").querySelectorAll("input:checked")]
-        .map(input => Number(input.value));
+      const ids = [...$("playerList").querySelectorAll("input:checked")].map(input => Number(input.value));
       return PLAYER_PROFILES.filter(player => ids.includes(player.id));
     }
 
@@ -1376,7 +1437,6 @@
         alert("Please select at least one multiplication table.");
         return;
       }
-
       const selectedPlayers = selectedPlayersFromUI();
       const count = Number($("questionsPerPlayer").value);
 
@@ -1384,24 +1444,16 @@
         alert("Select at least one competitor.");
         return;
       }
-
       if (!Number.isInteger(count) || count < 1 || count > 100) {
         alert("Questions per player must be a whole number from 1 to 100.");
         return;
       }
 
+      state.deck = []; // Reset deck for multi
       lastQuestion = null;
       state.multi.questionsPerPlayer = count;
       state.multi.players = selectedPlayers.map(player => ({
-        ...player,
-        startedAt: 0,
-        totalActiveMs: 0,
-        questionIndex: 0,
-        score: 0,
-        records: [],
-        current: null,
-        attempt: 0,
-        questionStartedAt: 0
+        ...player, startedAt: 0, totalActiveMs: 0, questionIndex: 0, score: 0, records: [], current: null, attempt: 0, questionStartedAt: 0
       }));
       state.multi.playerIndex = 0;
 
@@ -1413,34 +1465,25 @@
         showMultiSummary();
         return;
       }
-
       const player = state.multi.players[state.multi.playerIndex];
-
       setAccent(player.themeColor);
       $("readyAvatar").textContent = initials(player.name);
       $("readyAvatar").style.background = player.themeColor;
       $("readyPlayerName").textContent = player.name;
-      $("readyProgress").textContent =
-        `Player ${state.multi.playerIndex + 1} of ${state.multi.players.length}`;
-
+      $("readyProgress").textContent = `Player ${state.multi.playerIndex + 1} of ${state.multi.players.length}`;
       $("startTurn").textContent = `Start ${player.name}'s Turn`;
       setScreen(screens.multiReady);
     }
 
-    $("startTurn").addEventListener("click", () => {
-      startPlayerTurn();
-    });
+    $("startTurn").addEventListener("click", startPlayerTurn);
 
     function startPlayerTurn() {
       const player = state.multi.players[state.multi.playerIndex];
       if (!player) return;
-
       player.startedAt = performance.now();
       player.questionStartedAt = performance.now();
-
       setScreen(screens.multiGame);
       nextMultiQuestion();
-
       if (timerHandle) clearInterval(timerHandle);
       timerHandle = setInterval(updateMultiClock, 50);
     }
@@ -1448,49 +1491,35 @@
     function updateMultiClock() {
       const player = state.multi.players[state.multi.playerIndex];
       if (!player || !player.startedAt) return;
-
-      const currentQuestionElapsed = player.questionStartedAt
-        ? performance.now() - player.questionStartedAt
-        : 0;
-
-      $("multiElapsed").textContent =
-        formatSeconds(player.totalActiveMs + currentQuestionElapsed);
+      const currentQuestionElapsed = player.questionStartedAt ? performance.now() - player.questionStartedAt : 0;
+      $("multiElapsed").textContent = formatSeconds(player.totalActiveMs + currentQuestionElapsed);
     }
 
     function nextMultiQuestion() {
       const player = state.multi.players[state.multi.playerIndex];
-
       if (!player || player.questionIndex >= state.multi.questionsPerPlayer) {
         finishCurrentPlayerOrAdvance();
         return;
       }
-
       player.current = newQuestion(state.multi.selectedTables);
       player.attempt = 1;
       player.questionStartedAt = performance.now();
 
       $("multiCurrentPlayer").textContent = player.name;
-      $("multiQuestionNumber").textContent =
-        `Question ${player.questionIndex + 1} of ${state.multi.questionsPerPlayer}`;
-      $("multiProgressText").textContent =
-        `${player.questionIndex} / ${state.multi.questionsPerPlayer}`;
-      $("multiProgress").style.width =
-        `${player.questionIndex / state.multi.questionsPerPlayer * 100}%`;
+      $("multiQuestionNumber").textContent = `Question ${player.questionIndex + 1} of ${state.multi.questionsPerPlayer}`;
+      $("multiProgressText").textContent = `${player.questionIndex} / ${state.multi.questionsPerPlayer}`;
+      $("multiProgress").style.width = `${player.questionIndex / state.multi.questionsPerPlayer * 100}%`;
       $("multiQuestion").textContent = `${player.current.a} × ${player.current.b}`;
       $("multiAnswer").value = "";
       $("multiFeedback").textContent = "";
       $("multiFeedback").className = "feedback";
 
-      if ($("multiSpeech").checked) {
-        speakQuestion(player.current.a, player.current.b);
-      }
-
+      if ($("multiSpeech").checked) speakQuestion(player.current.a, player.current.b);
       requestAnimationFrame(() => $("multiAnswer").focus());
     }
 
     $("multiAnswerForm").addEventListener("submit", (event) => {
       event.preventDefault();
-
       const player = state.multi.players[state.multi.playerIndex];
       if (!player || !screens.multiGame.classList.contains("active")) return;
 
@@ -1510,110 +1539,64 @@
 
       if (correct) {
         player.score += 1;
-        player.records.push({
-          a: player.current.a,
-          b: player.current.b,
-          timeMs: elapsed,
-          result: "correct",
-          attempts: player.attempt
-        });
+        player.records.push({ a: player.current.a, b: player.current.b, timeMs: elapsed, result: "correct", attempts: player.attempt });
         player.questionIndex += 1;
         player.totalActiveMs += elapsed;
 
-        $("multiFeedback").textContent =
-          player.attempt === 1 ? "Correct! ✓" : "Correct on the second attempt! ✓";
+        $("multiFeedback").textContent = player.attempt === 1 ? "Correct! ✓" : "Correct on the second attempt! ✓";
         $("multiFeedback").className = "feedback correct";
-
-        setTimeout(() => {
-          if (screens.multiGame.classList.contains("active")) finishQuestionAndPass();
-        }, 180);
-
+        setTimeout(() => { if (screens.multiGame.classList.contains("active")) finishQuestionAndPass(); }, 180);
       } else if (player.attempt === 1) {
         player.attempt = 2;
         $("multiFeedback").textContent = "Incorrect! Try again.";
         $("multiFeedback").className = "feedback incorrect";
         input.value = "";
         input.focus();
-
       } else {
-        player.records.push({
-          a: player.current.a,
-          b: player.current.b,
-          timeMs: elapsed,
-          result: "incorrect",
-          attempts: 2
-        });
+        player.records.push({ a: player.current.a, b: player.current.b, timeMs: elapsed, result: "incorrect", attempts: 2 });
         player.questionIndex += 1;
         player.totalActiveMs += elapsed;
 
         $("multiFeedback").textContent = `Answer: ${player.current.answer}`;
         $("multiFeedback").className = "feedback reveal";
-
-        setTimeout(() => {
-          if (screens.multiGame.classList.contains("active")) finishQuestionAndPass();
-        }, 700);
+        setTimeout(() => { if (screens.multiGame.classList.contains("active")) finishQuestionAndPass(); }, 700);
       }
     });
 
     function finishQuestionAndPass() {
       const player = state.multi.players[state.multi.playerIndex];
       if (!player) return;
-
-      if (timerHandle) {
-        clearInterval(timerHandle);
-        timerHandle = null;
-      }
-
+      if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
       advanceToNextActivePlayer();
     }
 
-    function finishCurrentPlayerOrAdvance() {
-      advanceToNextActivePlayer();
-    }
+    function finishCurrentPlayerOrAdvance() { advanceToNextActivePlayer(); }
 
     function advanceToNextActivePlayer() {
       const totalPlayers = state.multi.players.length;
-
-      if (!totalPlayers) {
-        showMultiSummary();
-        return;
-      }
-
+      if (!totalPlayers) { showMultiSummary(); return; }
       for (let offset = 1; offset <= totalPlayers; offset++) {
         const nextIndex = (state.multi.playerIndex + offset) % totalPlayers;
         const candidate = state.multi.players[nextIndex];
-
         if (candidate.questionIndex < state.multi.questionsPerPlayer) {
           state.multi.playerIndex = nextIndex;
           showReadyScreen();
           return;
         }
       }
-
       state.multi.players.forEach(player => {
-        if (player.startedAt && !player.totalActiveMs) {
-          player.totalActiveMs = player.records.reduce(
-            (sum, record) => sum + record.timeMs, 0
-          );
-        }
+        if (player.startedAt && !player.totalActiveMs) player.totalActiveMs = player.records.reduce((sum, record) => sum + record.timeMs, 0);
       });
-
       showMultiSummary();
     }
 
     $("quitMulti").addEventListener("click", () => {
       if (!confirm("End the match now and view results?")) return;
-
       const player = state.multi.players[state.multi.playerIndex];
       if (player && player.questionStartedAt && screens.multiGame.classList.contains("active")) {
         player.totalActiveMs += performance.now() - player.questionStartedAt;
       }
-
-      if (timerHandle) {
-        clearInterval(timerHandle);
-        timerHandle = null;
-      }
-
+      if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
       showMultiSummary();
     });
 
@@ -1622,28 +1605,19 @@
        ------------------------------------------------------------ */
     function showMultiSummary() {
       const players = state.multi.players;
-
       const ranking = players.map((p) => ({
         ...p,
         accuracy: p.records.length ? p.score / p.records.length * 100 : 0,
         avgMs: average(p.records.map(r => r.timeMs))
-      })).sort((a, b) => {
-        return b.accuracy - a.accuracy || a.totalActiveMs - b.totalActiveMs;
-      });
+      })).sort((a, b) => b.accuracy - a.accuracy || a.totalActiveMs - b.totalActiveMs);
 
-      const allRecords = players.flatMap(p =>
-        p.records.map(r => ({ ...r, player: p.name }))
-      );
-      const fastest = allRecords.reduce(
-        (best, r) => !best || r.timeMs < best.timeMs ? r : best, null
-      );
-      const hardest = allRecords.reduce(
-        (best, r) => !best || r.timeMs > best.timeMs ? r : best, null
-      );
+      const allRecords = players.flatMap(p => p.records.map(r => ({ ...r, player: p.name })));
+      const fastest = allRecords.reduce((best, r) => !best || r.timeMs < best.timeMs ? r : best, null);
+      const hardest = allRecords.reduce((best, r) => !best || r.timeMs > best.timeMs ? r : best, null);
+      const globalMaxTime = allRecords.length ? Math.max(...allRecords.map(r => r.timeMs)) : 0;
 
       $("summaryTitle").textContent = "Multiplayer results";
-      $("summarySubtitle").textContent =
-        `${players.length} player(s) • ${state.multi.questionsPerPlayer} question(s) per player`;
+      $("summarySubtitle").textContent = `${players.length} player(s) • ${state.multi.questionsPerPlayer} question(s) per player`;
 
       $("summaryContent").innerHTML = `
         <div class="analytics-grid">
@@ -1651,54 +1625,39 @@
             <h3>Leaderboard</h3>
             <div class="table-wrap">
               <table>
-                <thead>
-                  <tr>
-                    <th>Rank</th><th>Player</th><th>Accuracy</th>
-                    <th>Correct</th><th>Avg. question</th><th>Total active time</th>
-                  </tr>
-                </thead>
+                <thead><tr><th>Rank</th><th>Player</th><th>Accuracy</th><th>Correct</th><th>Avg. question</th><th>Total time</th></tr></thead>
                 <tbody>
-                  ${ranking.map((p, i) => `
-                    <tr>
-                      <td class="rank">#${i + 1}</td>
-                      <td><strong>${escapeHtml(p.name)}</strong></td>
-                      <td>${formatPercent(p.accuracy)}</td>
-                      <td>${p.score}/${p.records.length}</td>
-                      <td>${formatSeconds(p.avgMs)}</td>
-                      <td>${formatSeconds(p.totalActiveMs)}</td>
-                    </tr>
-                  `).join("")}
+                  ${ranking.map((p, i) => `<tr><td class="rank">#${i + 1}</td><td><strong>${escapeHtml(p.name)}</strong></td><td>${formatPercent(p.accuracy)}</td><td>${p.score}/${p.records.length}</td><td>${formatSeconds(p.avgMs)}</td><td>${formatSeconds(p.totalActiveMs)}</td></tr>`).join("")}
                 </tbody>
               </table>
             </div>
-            <p class="helper">
-              Ranking prioritizes accuracy; when accuracy is tied, lower total active
-              time ranks higher.
-            </p>
           </article>
-
+          <article class="analytics-card full">
+            <h3>Response Time Distributions</h3>
+            <p class="helper">All players scaled to the same x-axis (0s to ${formatSeconds(globalMaxTime, 1)}) for comparison.</p>
+            <div style="display: flex; flex-direction: column; gap: 20px; margin-top: 15px;">
+              ${players.map(p => {
+                const times = p.records.map(r => r.timeMs);
+                return `
+                  <div>
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                      <span class="player-dot" style="background:${p.themeColor};width:12px;height:12px;"></span>
+                      <span style="font-weight:700;font-size:13px;">${escapeHtml(p.name)}</span>
+                    </div>
+                    ${generateBoxplotHTML(times, globalMaxTime, p.themeColor, hexToRgba(p.themeColor, 0.15))}
+                  </div>
+                `;
+              }).join("")}
+            </div>
+          </article>
           <article class="analytics-card">
             <h3>Match fastest</h3>
-            <p class="insight">
-              ${fastest
-                ? `<strong>${escapeHtml(fastest.player)}</strong> answered
-                   <strong>${fastest.a} × ${fastest.b}</strong> in
-                   <strong>${formatSeconds(fastest.timeMs)}</strong>.`
-                : "No completed questions."}
-            </p>
+            <p class="insight">${fastest ? `<strong>${escapeHtml(fastest.player)}</strong> answered <strong>${fastest.a} × ${fastest.b}</strong> in <strong>${formatSeconds(fastest.timeMs)}</strong>.` : "No completed questions."}</p>
           </article>
-
           <article class="analytics-card">
             <h3>Hardest / longest</h3>
-            <p class="insight">
-              ${hardest
-                ? `<strong>${escapeHtml(hardest.player)}</strong> took
-                   <strong>${formatSeconds(hardest.timeMs)}</strong> on
-                   <strong>${hardest.a} × ${hardest.b}</strong>.`
-                : "No completed questions."}
-            </p>
+            <p class="insight">${hardest ? `<strong>${escapeHtml(hardest.player)}</strong> took <strong>${formatSeconds(hardest.timeMs)}</strong> on <strong>${hardest.a} × ${hardest.b}</strong>.` : "No completed questions."}</p>
           </article>
-
           <article class="analytics-card full">
             <h3>Per-player performance</h3>
             <div class="analytics-grid">
@@ -1707,7 +1666,6 @@
           </article>
         </div>
       `;
-
       setScreen(screens.summary);
       setAccent("#2563eb");
     }
@@ -1715,13 +1673,7 @@
     function renderPlayerAnalytics(player) {
       const times = player.records.map(r => r.timeMs);
       const longest = longestRecord(player.records);
-      const trend = getTrend(times);
-      const midpoint = Math.ceil(times.length / 2);
-      const firstHalf = times.slice(0, midpoint);
-      const secondHalf = times.slice(midpoint);
-      const accuracy = player.records.length
-        ? player.score / player.records.length * 100
-        : 0;
+      const accuracy = player.records.length ? player.score / player.records.length * 100 : 0;
 
       return `
         <article class="analytics-card">
@@ -1729,25 +1681,14 @@
             <span class="player-dot" style="background:${player.themeColor};width:18px;height:18px;"></span>
             <h3 style="margin:0;">${escapeHtml(player.name)}</h3>
           </div>
-
           <div class="metric-grid">
             <div class="metric"><span>Total time</span><strong>${formatSeconds(player.totalActiveMs)}</strong></div>
             <div class="metric"><span>Accuracy</span><strong>${formatPercent(accuracy)}</strong></div>
             <div class="metric"><span>Avg. question</span><strong>${formatSeconds(average(times))}</strong></div>
             <div class="metric"><span>Correct</span><strong>${player.score}/${player.records.length}</strong></div>
           </div>
-
-          <p class="helper">
-            Longest:
-            <strong>${longest
-              ? `${longest.a} × ${longest.b} — ${formatSeconds(longest.timeMs)}`
-              : "—"}</strong>
-          </p>
-
-          <p class="helper">
-            Speed trend: <strong>${trend}</strong>.
-            First half ${formatSeconds(average(firstHalf))};
-            second half ${formatSeconds(average(secondHalf))}.
+          <p class="helper" style="margin-top: 15px;">
+            Longest question: <strong>${longest ? `${longest.a} × ${longest.b} — ${formatSeconds(longest.timeMs)}` : "—"}</strong>
           </p>
         </article>
       `;
@@ -1759,14 +1700,8 @@
     $("restart").addEventListener("click", () => {
       if (timerHandle) clearInterval(timerHandle);
       timerHandle = null;
-
-      if (currentMode === "multi") {
-        setAccent("#2563eb");
-        setScreen(screens.multiSetup);
-      } else {
-        setAccent("#2563eb");
-        setScreen(screens.singleSetup);
-      }
+      setAccent("#2563eb");
+      setScreen(currentMode === "multi" ? screens.multiSetup : screens.singleSetup);
     });
 
     /* ------------------------------------------------------------
