@@ -165,6 +165,27 @@
       font-weight: 800;
     }
 
+    .tables-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 9px;
+    }
+
+    .select-all-option {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .select-all-option input {
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
     .tables {
       display: grid;
       grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -532,7 +553,13 @@
             <p class="helper">Choose the tables you want to practise, then race the clock.</p>
 
             <div class="field">
-              <label class="field-label">Multiplication tables</label>
+              <div class="tables-header">
+                <label class="field-label" style="margin-bottom: 0;">Multiplication tables</label>
+                <label class="select-all-option">
+                  <input type="checkbox" id="singleSelectAll">
+                  <span>Select all/none</span>
+                </label>
+              </div>
               <div id="singleTables" class="tables" aria-label="Select multiplication tables"></div>
             </div>
 
@@ -544,6 +571,13 @@
               <p id="durationHelp" class="helper" style="margin:7px 0 0;">
                 Enter any whole-number duration, in seconds.
               </p>
+            </div>
+
+            <div class="field">
+              <label class="player-option">
+                <input type="checkbox" id="singleSpeech">
+                <span>Read questions aloud (e.g. "six by seven")</span>
+              </label>
             </div>
 
             <div class="button-row">
@@ -578,7 +612,13 @@
             <p class="helper">Players share one device and alternate after every completed question. Handoffs are never timed.</p>
 
             <div class="field">
-              <label class="field-label">Multiplication tables</label>
+              <div class="tables-header">
+                <label class="field-label" style="margin-bottom: 0;">Multiplication tables</label>
+                <label class="select-all-option">
+                  <input type="checkbox" id="multiSelectAll">
+                  <span>Select all/none</span>
+                </label>
+              </div>
               <div id="multiTables" class="tables" aria-label="Select multiplication tables"></div>
             </div>
 
@@ -591,6 +631,13 @@
             <div class="field">
               <label class="field-label">Competitors</label>
               <div id="playerList" class="check-list"></div>
+            </div>
+
+            <div class="field">
+              <label class="player-option">
+                <input type="checkbox" id="multiSpeech">
+                <span>Read questions aloud (e.g. "six by seven")</span>
+              </label>
             </div>
 
             <div class="button-row">
@@ -757,12 +804,18 @@
        Player JSON structure requested by the specification.
        ------------------------------------------------------------ */
     const PLAYER_PROFILES = [
-      { id: 1, name: "Alice", themeColor: "#3B82F6" },
-      { id: 2, name: "Bob", themeColor: "#10B981" },
-      { id: 3, name: "Charlie", themeColor: "#F59E0B" }
+      { id: 1, name: "Ruadhán", themeColor: "#3B82F6" },
+      { id: 2, name: "Senan", themeColor: "#10B981" },
+      { id: 3, name: "Brian", themeColor: "#F59E0B" }
     ];
 
     const TABLES = Array.from({ length: 11 }, (_, i) => i + 2);
+
+    const NUMBER_WORDS = {
+      1: "one", 2: "two", 3: "three", 4: "four", 5: "five",
+      6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten",
+      11: "eleven", 12: "twelve"
+    };
 
     /* ------------------------------------------------------------
        DOM helpers and app state.
@@ -780,10 +833,11 @@
 
     let currentMode = "single";
     let timerHandle = null;
+    let lastQuestion = null;
 
     const state = {
       single: {
-        selectedTables: [2,3,4,5,6,7,8,9,10,11,12],
+        selectedTables: [],
         durationMs: 60000,
         startedAt: 0,
         deadline: 0,
@@ -793,11 +847,12 @@
         attempt: 0,
         score: 0,
         answered: 0,
-        records: []
+        records: [],
+        questionAnswered: false
       },
 
       multi: {
-        selectedTables: [2,3,4,5,6,7,8,9,10,11,12],
+        selectedTables: [],
         questionsPerPlayer: 10,
         players: [],
         playerIndex: 0,
@@ -805,6 +860,20 @@
         questionStartedAt: 0
       }
     };
+
+    /* ------------------------------------------------------------
+       Speech synthesis helper.
+       ------------------------------------------------------------ */
+    function speakQuestion(a, b) {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+        const wordA = NUMBER_WORDS[a] || a;
+        const wordB = NUMBER_WORDS[b] || b;
+        const utterance = new SpeechSynthesisUtterance(`${wordA} by ${wordB}`);
+        utterance.rate = 1.0;
+        window.speechSynthesis.speak(utterance);
+      }
+    }
 
     /* ------------------------------------------------------------
        Generic UI helpers.
@@ -890,12 +959,24 @@
     }
 
     function newQuestion(tables) {
-      // IMPORTANT: the selected table is always the first factor.
-      // If only [6] is selected, every question is 6 × 1 through 6 × 12.
       const selected = Array.isArray(tables) && tables.length ? tables : [2];
-      const a = pick(selected);
-      const b = Math.floor(Math.random() * 12) + 1;
-      return { a, b, answer: a * b };
+      let q;
+      let attempts = 0;
+
+      do {
+        const a = pick(selected);
+        const b = Math.floor(Math.random() * 12) + 1;
+        q = { a, b, answer: a * b };
+        attempts++;
+      } while (
+        lastQuestion &&
+        q.a === lastQuestion.a &&
+        q.b === lastQuestion.b &&
+        (selected.length > 1 || attempts < 12)
+      );
+
+      lastQuestion = q;
+      return q;
     }
 
     function initials(name) {
@@ -903,33 +984,48 @@
     }
 
     /* ------------------------------------------------------------
-       Table selectors.
+       Table selectors and Select All/None handling.
        ------------------------------------------------------------ */
-    function renderTableSelectors(containerId, selected) {
+    function setupTableSelector(containerId, selectAllId, selectedArray) {
       const container = $(containerId);
-      container.innerHTML = "";
+      const selectAll = $(selectAllId);
 
-      TABLES.forEach((table) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "table-choice" + (selected.includes(table) ? " selected" : "");
-        button.textContent = table;
-        button.setAttribute("aria-pressed", String(selected.includes(table)));
+      function updateUI() {
+        container.innerHTML = "";
+        TABLES.forEach((table) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "table-choice" + (selectedArray.includes(table) ? " selected" : "");
+          button.textContent = table;
+          button.setAttribute("aria-pressed", String(selectedArray.includes(table)));
 
-        button.addEventListener("click", () => {
-          const index = selected.indexOf(table);
-          if (index >= 0) {
-            if (selected.length === 1) return; // Always keep at least one table.
-            selected.splice(index, 1);
-          } else {
-            selected.push(table);
-            selected.sort((a, b) => a - b);
-          }
-          renderTableSelectors(containerId, selected);
+          button.addEventListener("click", () => {
+            const index = selectedArray.indexOf(table);
+            if (index >= 0) {
+              selectedArray.splice(index, 1);
+            } else {
+              selectedArray.push(table);
+              selectedArray.sort((a, b) => a - b);
+            }
+            selectAll.checked = selectedArray.length === TABLES.length;
+            updateUI();
+          });
+
+          container.appendChild(button);
         });
 
-        container.appendChild(button);
+        selectAll.checked = selectedArray.length === TABLES.length;
+      }
+
+      selectAll.addEventListener("change", () => {
+        selectedArray.length = 0;
+        if (selectAll.checked) {
+          selectedArray.push(...TABLES);
+        }
+        updateUI();
       });
+
+      updateUI();
     }
 
     function renderPlayers() {
@@ -962,6 +1058,16 @@
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
       }[char]));
     }
+
+    /* ------------------------------------------------------------
+       Keyboard navigation (Enter key on desktop to start turn).
+       ------------------------------------------------------------ */
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && screens.multiReady.classList.contains("active")) {
+        event.preventDefault();
+        startPlayerTurn();
+      }
+    });
 
     /* ------------------------------------------------------------
        Mode switching.
@@ -997,9 +1103,16 @@
       state.single.score = 0;
       state.single.answered = 0;
       state.single.records = [];
+      state.single.questionAnswered = false;
+      lastQuestion = null;
     }
 
     function startSingleSession() {
+      if (!state.single.selectedTables.length) {
+        alert("Please select at least one multiplication table.");
+        return;
+      }
+
       resetSingleState();
 
       const durationSeconds = Number($("duration").value.trim());
@@ -1045,6 +1158,7 @@
       state.single.questionNo += 1;
       state.single.attempt = 1;
       state.single.questionStartedAt = performance.now();
+      state.single.questionAnswered = false;
 
       $("singleQuestionNumber").textContent = `Question ${state.single.questionNo}`;
       $("singleQuestion").textContent =
@@ -1052,6 +1166,10 @@
       $("singleAnswer").value = "";
       $("singleFeedback").textContent = "";
       $("singleFeedback").className = "feedback";
+
+      if ($("singleSpeech").checked) {
+        speakQuestion(state.single.question.a, state.single.question.b);
+      }
 
       requestAnimationFrame(() => $("singleAnswer").focus());
     }
@@ -1086,6 +1204,7 @@
       const elapsed = performance.now() - state.single.questionStartedAt;
 
       if (answer === state.single.question.answer) {
+        state.single.questionAnswered = true;
         state.single.score += 1;
         recordSingleQuestion(elapsed, "correct", state.single.attempt);
 
@@ -1106,6 +1225,7 @@
         input.value = "";
         input.focus();
       } else {
+        state.single.questionAnswered = true;
         recordSingleQuestion(elapsed, "incorrect", 2);
         $("singleFeedback").textContent =
           `Answer: ${state.single.question.answer}`;
@@ -1128,6 +1248,17 @@
       if (timerHandle) {
         clearInterval(timerHandle);
         timerHandle = null;
+      }
+
+      // If timer expired, accept any typed input matching the correct answer
+      if (!state.single.questionAnswered && state.single.question) {
+        const currentInput = $("singleAnswer").value.trim();
+        if (currentInput !== "" && Number(currentInput) === state.single.question.answer) {
+          const elapsed = performance.now() - state.single.questionStartedAt;
+          state.single.score += 1;
+          recordSingleQuestion(elapsed, "correct", state.single.attempt);
+          state.single.questionAnswered = true;
+        }
       }
 
       const elapsed = Math.min(
@@ -1241,6 +1372,11 @@
     }
 
     function startMultiMatch() {
+      if (!state.multi.selectedTables.length) {
+        alert("Please select at least one multiplication table.");
+        return;
+      }
+
       const selectedPlayers = selectedPlayersFromUI();
       const count = Number($("questionsPerPlayer").value);
 
@@ -1254,6 +1390,7 @@
         return;
       }
 
+      lastQuestion = null;
       state.multi.questionsPerPlayer = count;
       state.multi.players = selectedPlayers.map(player => ({
         ...player,
@@ -1298,9 +1435,6 @@
       const player = state.multi.players[state.multi.playerIndex];
       if (!player) return;
 
-      // Each "turn" now consists of exactly ONE question.
-      // The next player gets the device immediately after this question,
-      // with an interstitial so the physical handoff is never timed.
       player.startedAt = performance.now();
       player.questionStartedAt = performance.now();
 
@@ -1315,7 +1449,6 @@
       const player = state.multi.players[state.multi.playerIndex];
       if (!player || !player.startedAt) return;
 
-      // Total active time includes all of this player's question periods.
       const currentQuestionElapsed = player.questionStartedAt
         ? performance.now() - player.questionStartedAt
         : 0;
@@ -1347,6 +1480,10 @@
       $("multiAnswer").value = "";
       $("multiFeedback").textContent = "";
       $("multiFeedback").className = "feedback";
+
+      if ($("multiSpeech").checked) {
+        speakQuestion(player.current.a, player.current.b);
+      }
 
       requestAnimationFrame(() => $("multiAnswer").focus());
     }
@@ -1387,7 +1524,6 @@
           player.attempt === 1 ? "Correct! ✓" : "Correct on the second attempt! ✓";
         $("multiFeedback").className = "feedback correct";
 
-        // End this player's active timing period and pass the device.
         setTimeout(() => {
           if (screens.multiGame.classList.contains("active")) finishQuestionAndPass();
         }, 180);
@@ -1413,8 +1549,6 @@
         $("multiFeedback").textContent = `Answer: ${player.current.answer}`;
         $("multiFeedback").className = "feedback reveal";
 
-        // The second incorrect attempt also ends the active question
-        // and immediately hands the device to the next player.
         setTimeout(() => {
           if (screens.multiGame.classList.contains("active")) finishQuestionAndPass();
         }, 700);
@@ -1430,13 +1564,10 @@
         timerHandle = null;
       }
 
-      // If this player has completed all assigned questions, their next
-      // scheduled slot is skipped. Otherwise they rejoin the rotation later.
       advanceToNextActivePlayer();
     }
 
     function finishCurrentPlayerOrAdvance() {
-      // Kept as a safety guard for any future calls to nextMultiQuestion().
       advanceToNextActivePlayer();
     }
 
@@ -1448,7 +1579,6 @@
         return;
       }
 
-      // Find the next player in circular order who still has questions.
       for (let offset = 1; offset <= totalPlayers; offset++) {
         const nextIndex = (state.multi.playerIndex + offset) % totalPlayers;
         const candidate = state.multi.players[nextIndex];
@@ -1460,7 +1590,6 @@
         }
       }
 
-      // No player has any remaining questions.
       state.multi.players.forEach(player => {
         if (player.startedAt && !player.totalActiveMs) {
           player.totalActiveMs = player.records.reduce(
@@ -1477,7 +1606,6 @@
 
       const player = state.multi.players[state.multi.playerIndex];
       if (player && player.questionStartedAt && screens.multiGame.classList.contains("active")) {
-        // Only add the active current-question period. Handoffs are not timed.
         player.totalActiveMs += performance.now() - player.questionStartedAt;
       }
 
@@ -1500,7 +1628,6 @@
         accuracy: p.records.length ? p.score / p.records.length * 100 : 0,
         avgMs: average(p.records.map(r => r.timeMs))
       })).sort((a, b) => {
-        // Primary ranking: accuracy. Tie-breaker: lower active time.
         return b.accuracy - a.accuracy || a.totalActiveMs - b.totalActiveMs;
       });
 
@@ -1645,8 +1772,8 @@
     /* ------------------------------------------------------------
        Initialization.
        ------------------------------------------------------------ */
-    renderTableSelectors("singleTables", state.single.selectedTables);
-    renderTableSelectors("multiTables", state.multi.selectedTables);
+    setupTableSelector("singleTables", "singleSelectAll", state.single.selectedTables);
+    setupTableSelector("multiTables", "multiSelectAll", state.multi.selectedTables);
     renderPlayers();
 
     $("startSingle").addEventListener("click", startSingleSession);
