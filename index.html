@@ -1,0 +1,1656 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#2563eb">
+  <title>Times Table Trainer</title>
+
+  <style>
+    /* ============================================================
+       Times Table Trainer — CSS
+       Pure CSS3, responsive/mobile-first, no external dependencies.
+       ============================================================ */
+
+    :root {
+      --accent: #2563eb;
+      --accent-soft: #eff6ff;
+      --accent-border: #bfdbfe;
+      --text: #172033;
+      --muted: #667085;
+      --surface: #ffffff;
+      --surface-2: #f8fafc;
+      --border: #e5e7eb;
+      --success: #15803d;
+      --success-bg: #f0fdf4;
+      --danger: #dc2626;
+      --danger-bg: #fef2f2;
+      --warning: #b45309;
+      --warning-bg: #fffbeb;
+      --shadow: 0 14px 40px rgba(15, 23, 42, .09);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      min-height: 100%;
+      background: #f1f5f9;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+                   "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(37,99,235,.08), transparent 30rem),
+        #f1f5f9;
+    }
+
+    button, input { font: inherit; }
+
+    button {
+      border: 0;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button:focus-visible,
+    input:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--accent) 28%, transparent);
+      outline-offset: 2px;
+    }
+
+    .app {
+      width: min(1180px, 100%);
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-mark {
+      width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+      border-radius: 13px;
+      background: var(--accent);
+      color: white;
+      font-weight: 900;
+      font-size: 21px;
+      box-shadow: 0 8px 20px rgba(37,99,235,.2);
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 2px; font-size: clamp(20px, 3vw, 27px); }
+    h2 { margin-bottom: 8px; font-size: clamp(22px, 4vw, 30px); }
+    h3 { margin-bottom: 8px; }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .mode-switch {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      padding: 4px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+    }
+
+    .mode-switch button {
+      padding: 9px 13px;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--muted);
+      font-weight: 750;
+    }
+
+    .mode-switch button.active {
+      background: var(--accent);
+      color: white;
+    }
+
+    .screen {
+      display: none;
+      animation: fadeIn .18s ease-out;
+    }
+
+    .screen.active { display: block; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(3px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: clamp(18px, 3vw, 30px);
+    }
+
+    .setup-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr);
+      gap: 18px;
+    }
+
+    .field { margin-bottom: 20px; }
+    .field:last-child { margin-bottom: 0; }
+
+    label.field-label {
+      display: block;
+      margin-bottom: 9px;
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .tables {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .table-choice {
+      min-height: 45px;
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      background: var(--surface-2);
+      color: var(--text);
+      font-weight: 800;
+    }
+
+    .table-choice.selected {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent);
+      box-shadow: inset 0 0 0 1px var(--accent);
+    }
+
+    select,
+    input[type="number"],
+    input[type="text"] {
+      width: 100%;
+      min-height: 46px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      background: white;
+      color: var(--text);
+    }
+
+    .check-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .player-option {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 11px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface-2);
+      cursor: pointer;
+    }
+
+    .player-option input { accent-color: var(--accent); }
+    .player-dot {
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .btn {
+      min-height: 46px;
+      padding: 10px 17px;
+      border-radius: 11px;
+      font-weight: 850;
+      transition: transform .12s ease, opacity .12s ease;
+    }
+
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-secondary { background: #e2e8f0; color: #334155; }
+    .btn-danger { background: #fee2e2; color: #991b1b; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .helper {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .game-card {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 9px;
+      margin-bottom: 18px;
+    }
+
+    .hud-item {
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      background: var(--surface-2);
+      text-align: center;
+    }
+
+    .hud-label {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+
+    .hud-value {
+      display: block;
+      margin-top: 2px;
+      font-size: clamp(18px, 4vw, 25px);
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .progress {
+      height: 8px;
+      margin: 0 0 25px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: #e2e8f0;
+    }
+
+    .progress > div {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      transition: width .2s linear;
+    }
+
+    .question-area {
+      min-height: 330px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+    }
+
+    .question-kicker {
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 750;
+    }
+
+    .question {
+      margin: 7px 0 18px;
+      font-size: clamp(52px, 13vw, 105px);
+      line-height: 1;
+      font-weight: 950;
+      letter-spacing: -0.06em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .answer-form {
+      display: flex;
+      justify-content: center;
+      gap: 9px;
+      width: min(420px, 100%);
+      margin: 0 auto;
+    }
+
+    .answer-input {
+      min-height: 58px !important;
+      text-align: center;
+      font-size: 27px !important;
+      font-weight: 850;
+    }
+
+    .feedback {
+      min-height: 28px;
+      margin: 12px 0 0;
+      font-weight: 850;
+    }
+
+    .feedback.correct { color: var(--success); }
+    .feedback.incorrect { color: var(--danger); }
+    .feedback.reveal { color: var(--warning); }
+
+    .interstitial {
+      min-height: 440px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+    }
+
+    .player-avatar {
+      width: 78px;
+      height: 78px;
+      margin: 0 auto 15px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      color: white;
+      font-size: 27px;
+      font-weight: 950;
+      background: var(--accent);
+    }
+
+    .player-name {
+      margin-bottom: 5px;
+      font-size: clamp(30px, 7vw, 50px);
+      font-weight: 950;
+    }
+
+    .summary-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin: 18px 0;
+    }
+
+    .metric {
+      padding: 15px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface-2);
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 3px;
+      font-size: 24px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .analytics-card {
+      padding: 17px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface);
+    }
+
+    .analytics-card.full { grid-column: 1 / -1; }
+
+    .insight {
+      padding: 12px 13px;
+      border-radius: 11px;
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-border);
+      line-height: 1.5;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 620px;
+    }
+
+    th, td {
+      padding: 11px 10px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      font-size: 13px;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    .rank {
+      font-size: 17px;
+      font-weight: 900;
+    }
+
+    .empty {
+      padding: 20px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 760px) {
+      .app { padding: 12px; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+      .mode-switch { width: 100%; }
+      .setup-grid,
+      .analytics-grid { grid-template-columns: 1fr; }
+      .analytics-card.full { grid-column: auto; }
+      .tables { grid-template-columns: repeat(4, 1fr); }
+      .metric-grid { grid-template-columns: repeat(2, 1fr); }
+      .hud { grid-template-columns: repeat(3, 1fr); }
+      .question-area { min-height: 300px; }
+      .answer-form { flex-direction: column; }
+      .answer-form .btn { width: 100%; }
+      .summary-header { flex-direction: column; }
+    }
+
+    @media (max-width: 420px) {
+      .card { padding: 15px; border-radius: 15px; }
+      .tables { grid-template-columns: repeat(3, 1fr); }
+      .metric strong { font-size: 20px; }
+      .hud-value { font-size: 18px; }
+      .question { font-size: 62px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: .001ms !important;
+        transition-duration: .001ms !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="app" id="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">×</div>
+        <div>
+          <h1>Times Table Trainer</h1>
+          <p class="subtitle">Practice tables 2–12 with precise performance tracking.</p>
+        </div>
+      </div>
+
+      <nav class="mode-switch" aria-label="Game mode">
+        <button id="singleModeBtn" class="active" type="button">Single Player</button>
+        <button id="multiModeBtn" type="button">Multiplayer</button>
+      </nav>
+    </header>
+
+    <!-- ==========================================================
+         SINGLE-PLAYER SETUP
+         ========================================================== -->
+    <section id="singleSetup" class="screen active">
+      <div class="card">
+        <div class="setup-grid">
+          <div>
+            <h2>Single-player practice</h2>
+            <p class="helper">Choose the tables you want to practise, then race the clock.</p>
+
+            <div class="field">
+              <label class="field-label">Multiplication tables</label>
+              <div id="singleTables" class="tables" aria-label="Select multiplication tables"></div>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="duration">Session duration (seconds)</label>
+              <input id="duration" type="text" value="60"
+                     inputmode="numeric" pattern="[0-9]*"
+                     autocomplete="off" aria-describedby="durationHelp">
+              <p id="durationHelp" class="helper" style="margin:7px 0 0;">
+                Enter any whole-number duration, in seconds.
+              </p>
+            </div>
+
+            <div class="button-row">
+              <button id="startSingle" class="btn btn-primary" type="button">Start Session</button>
+            </div>
+          </div>
+
+          <aside class="analytics-card">
+            <h3>How it works</h3>
+            <p class="helper">
+              You get two attempts. A correct first attempt advances immediately.
+              A second mistake reveals the answer before moving on.
+            </p>
+            <div class="insight">
+              <strong>Precision timing</strong><br>
+              Question times use <code>performance.now()</code> rather than the
+              system clock for stable high-resolution measurements.
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================================
+         MULTIPLAYER SETUP
+         ========================================================== -->
+    <section id="multiSetup" class="screen">
+      <div class="card">
+        <div class="setup-grid">
+          <div>
+            <h2>Pass-and-play match</h2>
+            <p class="helper">Players share one device and alternate after every completed question. Handoffs are never timed.</p>
+
+            <div class="field">
+              <label class="field-label">Multiplication tables</label>
+              <div id="multiTables" class="tables" aria-label="Select multiplication tables"></div>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="questionsPerPlayer">Questions per player</label>
+              <input id="questionsPerPlayer" type="number" min="1" max="100" step="1" value="10"
+                     inputmode="numeric" pattern="[0-9]*">
+            </div>
+
+            <div class="field">
+              <label class="field-label">Competitors</label>
+              <div id="playerList" class="check-list"></div>
+            </div>
+
+            <div class="button-row">
+              <button id="startMulti" class="btn btn-primary" type="button">Start Match</button>
+            </div>
+          </div>
+
+          <aside class="analytics-card">
+            <h3>Player profiles</h3>
+            <p class="helper">
+              Profiles are loaded from the JSON structure in the JavaScript
+              <code>PLAYER_PROFILES</code> constant. Each player receives their
+              own visual accent and performance record.
+            </p>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================================
+         SINGLE-PLAYER GAME
+         ========================================================== -->
+    <section id="singleGame" class="screen">
+      <div class="card game-card">
+        <div class="hud">
+          <div class="hud-item">
+            <span class="hud-label">Played</span>
+            <span id="singleElapsed" class="hud-value">0.0s</span>
+          </div>
+          <div class="hud-item">
+            <span class="hud-label">Remaining</span>
+            <span id="singleRemaining" class="hud-value">60.0s</span>
+          </div>
+          <div class="hud-item">
+            <span class="hud-label">Score</span>
+            <span id="singleScore" class="hud-value">0 / 0</span>
+          </div>
+        </div>
+
+        <div class="progress" aria-hidden="true">
+          <div id="singleProgress"></div>
+        </div>
+
+        <div class="question-area">
+          <div>
+            <div id="singleQuestionNumber" class="question-kicker">Question 1</div>
+            <div id="singleQuestion" class="question">7 × 8</div>
+
+            <form id="singleAnswerForm" class="answer-form">
+              <input id="singleAnswer" class="answer-input"
+                     type="text" inputmode="numeric" pattern="[0-9]*"
+                     autocomplete="off" enterkeyhint="done"
+                     aria-label="Answer" autofocus>
+              <button class="btn btn-primary" type="submit">Check Answer</button>
+            </form>
+
+            <div id="singleFeedback" class="feedback" role="status" aria-live="polite"></div>
+          </div>
+        </div>
+
+        <div class="button-row">
+          <button id="quitSingle" class="btn btn-secondary" type="button">End Session</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================================
+         MULTIPLAYER INTERSTITIAL
+         ========================================================== -->
+    <section id="multiReady" class="screen">
+      <div class="card game-card interstitial">
+        <div>
+          <div id="readyAvatar" class="player-avatar">A</div>
+          <div id="readyPlayerName" class="player-name">Alice</div>
+          <p class="helper">Pass the phone to this player. They will answer one question before the device passes to the next player.</p>
+          <p id="readyProgress" class="helper">Player 1 of 2</p>
+          <div class="button-row" style="justify-content:center;">
+            <button id="startTurn" class="btn btn-primary" type="button">Start Turn</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================================
+         MULTIPLAYER GAME
+         ========================================================== -->
+    <section id="multiGame" class="screen">
+      <div class="card game-card">
+        <div class="hud">
+          <div class="hud-item">
+            <span class="hud-label">Player</span>
+            <span id="multiCurrentPlayer" class="hud-value">Alice</span>
+          </div>
+          <div class="hud-item">
+            <span class="hud-label">Active time</span>
+            <span id="multiElapsed" class="hud-value">0.0s</span>
+          </div>
+          <div class="hud-item">
+            <span class="hud-label">Progress</span>
+            <span id="multiProgressText" class="hud-value">0 / 10</span>
+          </div>
+        </div>
+
+        <div class="progress" aria-hidden="true">
+          <div id="multiProgress"></div>
+        </div>
+
+        <div class="question-area">
+          <div>
+            <div id="multiQuestionNumber" class="question-kicker">Question 1 of 10</div>
+            <div id="multiQuestion" class="question">7 × 8</div>
+
+            <form id="multiAnswerForm" class="answer-form">
+              <input id="multiAnswer" class="answer-input"
+                     type="text" inputmode="numeric" pattern="[0-9]*"
+                     autocomplete="off" enterkeyhint="done"
+                     aria-label="Answer" autofocus>
+              <button class="btn btn-primary" type="submit">Check Answer</button>
+            </form>
+
+            <div id="multiFeedback" class="feedback" role="status" aria-live="polite"></div>
+          </div>
+        </div>
+
+        <div class="button-row">
+          <button id="quitMulti" class="btn btn-secondary" type="button">End Match</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==========================================================
+         SUMMARY
+         ========================================================== -->
+    <section id="summary" class="screen">
+      <div class="card">
+        <div class="summary-header">
+          <div>
+            <h2 id="summaryTitle">Session complete</h2>
+            <p id="summarySubtitle" class="helper"></p>
+          </div>
+          <button id="restart" class="btn btn-primary" type="button">New Session</button>
+        </div>
+
+        <div id="summaryContent"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    /* ============================================================
+       Times Table Trainer — JavaScript
+       ES6+, no framework/library dependencies.
+
+       Timing design:
+       - performance.now() supplies monotonic, high-resolution timestamps.
+       - Single player has an overall session deadline.
+       - Multiplayer starts/stops each player's active clock around
+         question answering only; interstitial handoffs are never timed.
+       ============================================================ */
+
+    "use strict";
+
+    /* ------------------------------------------------------------
+       Player JSON structure requested by the specification.
+       ------------------------------------------------------------ */
+    const PLAYER_PROFILES = [
+      { id: 1, name: "Alice", themeColor: "#3B82F6" },
+      { id: 2, name: "Bob", themeColor: "#10B981" },
+      { id: 3, name: "Charlie", themeColor: "#F59E0B" }
+    ];
+
+    const TABLES = Array.from({ length: 11 }, (_, i) => i + 2);
+
+    /* ------------------------------------------------------------
+       DOM helpers and app state.
+       ------------------------------------------------------------ */
+    const $ = (id) => document.getElementById(id);
+
+    const screens = {
+      singleSetup: $("singleSetup"),
+      multiSetup: $("multiSetup"),
+      singleGame: $("singleGame"),
+      multiReady: $("multiReady"),
+      multiGame: $("multiGame"),
+      summary: $("summary")
+    };
+
+    let currentMode = "single";
+    let timerHandle = null;
+
+    const state = {
+      single: {
+        selectedTables: [2,3,4,5,6,7,8,9,10,11,12],
+        durationMs: 60000,
+        startedAt: 0,
+        deadline: 0,
+        questionStartedAt: 0,
+        question: null,
+        questionNo: 0,
+        attempt: 0,
+        score: 0,
+        answered: 0,
+        records: []
+      },
+
+      multi: {
+        selectedTables: [2,3,4,5,6,7,8,9,10,11,12],
+        questionsPerPlayer: 10,
+        players: [],
+        playerIndex: 0,
+        current: null,
+        questionStartedAt: 0
+      }
+    };
+
+    /* ------------------------------------------------------------
+       Generic UI helpers.
+       ------------------------------------------------------------ */
+    function setScreen(screen) {
+      Object.values(screens).forEach((el) => el.classList.remove("active"));
+      screen.classList.add("active");
+      window.scrollTo({ top: 0, behavior: "instant" });
+    }
+
+    function setAccent(color) {
+      document.documentElement.style.setProperty("--accent", color);
+      document.documentElement.style.setProperty(
+        "--accent-soft",
+        hexToRgba(color, .08)
+      );
+      document.documentElement.style.setProperty(
+        "--accent-border",
+        hexToRgba(color, .35)
+      );
+      document.querySelector('meta[name="theme-color"]').setAttribute("content", color);
+    }
+
+    function hexToRgba(hex, alpha) {
+      const value = hex.replace("#", "");
+      const r = parseInt(value.substring(0, 2), 16);
+      const g = parseInt(value.substring(2, 4), 16);
+      const b = parseInt(value.substring(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function formatSeconds(ms, decimals = 1) {
+      return `${Math.max(0, ms / 1000).toFixed(decimals)}s`;
+    }
+
+    function formatPercent(value) {
+      return `${Number.isFinite(value) ? value.toFixed(1) : "0.0"}%`;
+    }
+
+    function average(values) {
+      if (!values.length) return 0;
+      return values.reduce((sum, n) => sum + n, 0) / values.length;
+    }
+
+    function getTrend(times) {
+      if (times.length < 2) return "Not enough data";
+
+      const mid = Math.floor(times.length / 2);
+      const first = average(times.slice(0, mid));
+      const second = average(times.slice(mid));
+      const threshold = Math.max(0.15, first * 0.08);
+
+      if (second < first - threshold) return "Improved";
+      if (second > first + threshold) return "Slowed down";
+      return "Stayed consistent";
+    }
+
+    function longestRecord(records) {
+      return records.reduce((longest, r) =>
+        !longest || r.timeMs > longest.timeMs ? r : longest, null);
+    }
+
+    function longestAverageQuestion(records) {
+      const groups = new Map();
+
+      records.forEach((r) => {
+        const key = `${r.a} × ${r.b}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(r.timeMs);
+      });
+
+      let best = null;
+      groups.forEach((times, question) => {
+        if (times.length < 1) return;
+        const item = { question, averageMs: average(times), count: times.length };
+        if (!best || item.averageMs > best.averageMs) best = item;
+      });
+      return best;
+    }
+
+    function pick(array) {
+      return array[Math.floor(Math.random() * array.length)];
+    }
+
+    function newQuestion(tables) {
+      // IMPORTANT: the selected table is always the first factor.
+      // If only [6] is selected, every question is 6 × 1 through 6 × 12.
+      const selected = Array.isArray(tables) && tables.length ? tables : [2];
+      const a = pick(selected);
+      const b = Math.floor(Math.random() * 12) + 1;
+      return { a, b, answer: a * b };
+    }
+
+    function initials(name) {
+      return name.split(/\s+/).map(x => x[0]).join("").slice(0, 2).toUpperCase();
+    }
+
+    /* ------------------------------------------------------------
+       Table selectors.
+       ------------------------------------------------------------ */
+    function renderTableSelectors(containerId, selected) {
+      const container = $(containerId);
+      container.innerHTML = "";
+
+      TABLES.forEach((table) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "table-choice" + (selected.includes(table) ? " selected" : "");
+        button.textContent = table;
+        button.setAttribute("aria-pressed", String(selected.includes(table)));
+
+        button.addEventListener("click", () => {
+          const index = selected.indexOf(table);
+          if (index >= 0) {
+            if (selected.length === 1) return; // Always keep at least one table.
+            selected.splice(index, 1);
+          } else {
+            selected.push(table);
+            selected.sort((a, b) => a - b);
+          }
+          renderTableSelectors(containerId, selected);
+        });
+
+        container.appendChild(button);
+      });
+    }
+
+    function renderPlayers() {
+      const list = $("playerList");
+      list.innerHTML = "";
+
+      PLAYER_PROFILES.forEach((player, index) => {
+        const label = document.createElement("label");
+        label.className = "player-option";
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.value = player.id;
+        checkbox.checked = index < 2;
+
+        const dot = document.createElement("span");
+        dot.className = "player-dot";
+        dot.style.background = player.themeColor;
+
+        const text = document.createElement("span");
+        text.innerHTML = `<strong>${escapeHtml(player.name)}</strong>`;
+
+        label.append(checkbox, dot, text);
+        list.appendChild(label);
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
+      }[char]));
+    }
+
+    /* ------------------------------------------------------------
+       Mode switching.
+       ------------------------------------------------------------ */
+    $("singleModeBtn").addEventListener("click", () => {
+      if (timerHandle) clearInterval(timerHandle);
+      currentMode = "single";
+      $("singleModeBtn").classList.add("active");
+      $("multiModeBtn").classList.remove("active");
+      setAccent("#2563eb");
+      setScreen(screens.singleSetup);
+    });
+
+    $("multiModeBtn").addEventListener("click", () => {
+      if (timerHandle) clearInterval(timerHandle);
+      currentMode = "multi";
+      $("multiModeBtn").classList.add("active");
+      $("singleModeBtn").classList.remove("active");
+      setAccent("#2563eb");
+      setScreen(screens.multiSetup);
+    });
+
+    /* ------------------------------------------------------------
+       Single-player setup and gameplay.
+       ------------------------------------------------------------ */
+    function resetSingleState() {
+      state.single.startedAt = 0;
+      state.single.deadline = 0;
+      state.single.questionStartedAt = 0;
+      state.single.question = null;
+      state.single.questionNo = 0;
+      state.single.attempt = 0;
+      state.single.score = 0;
+      state.single.answered = 0;
+      state.single.records = [];
+    }
+
+    function startSingleSession() {
+      resetSingleState();
+
+      const durationSeconds = Number($("duration").value.trim());
+      if (!Number.isInteger(durationSeconds) || durationSeconds < 1) {
+        alert("Session duration must be a whole number of seconds greater than 0.");
+        $("duration").focus();
+        return;
+      }
+
+      state.single.durationMs = durationSeconds * 1000;
+      state.single.startedAt = performance.now();
+      state.single.deadline = state.single.startedAt + state.single.durationMs;
+
+      $("singleFeedback").textContent = "";
+      $("singleFeedback").className = "feedback";
+
+      setScreen(screens.singleGame);
+      nextSingleQuestion();
+      updateSingleClock();
+
+      if (timerHandle) clearInterval(timerHandle);
+      timerHandle = setInterval(updateSingleClock, 50);
+    }
+
+    function updateSingleClock() {
+      const now = performance.now();
+      const elapsed = Math.min(now - state.single.startedAt, state.single.durationMs);
+      const remaining = Math.max(0, state.single.deadline - now);
+
+      $("singleElapsed").textContent = formatSeconds(elapsed);
+      $("singleRemaining").textContent = formatSeconds(remaining);
+      $("singleScore").textContent = `${state.single.score} / ${state.single.answered}`;
+      $("singleProgress").style.width =
+        `${Math.min(100, elapsed / state.single.durationMs * 100)}%`;
+
+      if (remaining <= 0) {
+        endSingleSession("Time expired");
+      }
+    }
+
+    function nextSingleQuestion() {
+      state.single.question = newQuestion(state.single.selectedTables);
+      state.single.questionNo += 1;
+      state.single.attempt = 1;
+      state.single.questionStartedAt = performance.now();
+
+      $("singleQuestionNumber").textContent = `Question ${state.single.questionNo}`;
+      $("singleQuestion").textContent =
+        `${state.single.question.a} × ${state.single.question.b}`;
+      $("singleAnswer").value = "";
+      $("singleFeedback").textContent = "";
+      $("singleFeedback").className = "feedback";
+
+      requestAnimationFrame(() => $("singleAnswer").focus());
+    }
+
+    function recordSingleQuestion(timeMs, result, attempts) {
+      state.single.records.push({
+        a: state.single.question.a,
+        b: state.single.question.b,
+        timeMs,
+        result,
+        attempts
+      });
+      state.single.answered += 1;
+    }
+
+    $("singleAnswerForm").addEventListener("submit", (event) => {
+      event.preventDefault();
+
+      if (!screens.singleGame.classList.contains("active")) return;
+
+      const input = $("singleAnswer");
+      const value = input.value.trim();
+
+      if (!/^\d+$/.test(value)) {
+        $("singleFeedback").textContent = "Enter a number.";
+        $("singleFeedback").className = "feedback incorrect";
+        input.focus();
+        return;
+      }
+
+      const answer = Number(value);
+      const elapsed = performance.now() - state.single.questionStartedAt;
+
+      if (answer === state.single.question.answer) {
+        state.single.score += 1;
+        recordSingleQuestion(elapsed, "correct", state.single.attempt);
+
+        $("singleFeedback").textContent =
+          state.single.attempt === 1 ? "Correct! ✓" : "Correct on the second attempt! ✓";
+        $("singleFeedback").className = "feedback correct";
+
+        setTimeout(() => {
+          if (screens.singleGame.classList.contains("active")) nextSingleQuestion();
+        }, 180);
+        return;
+      }
+
+      if (state.single.attempt === 1) {
+        state.single.attempt = 2;
+        $("singleFeedback").textContent = "Incorrect! Try again.";
+        $("singleFeedback").className = "feedback incorrect";
+        input.value = "";
+        input.focus();
+      } else {
+        recordSingleQuestion(elapsed, "incorrect", 2);
+        $("singleFeedback").textContent =
+          `Answer: ${state.single.question.answer}`;
+        $("singleFeedback").className = "feedback reveal";
+
+        setTimeout(() => {
+          if (screens.singleGame.classList.contains("active")) nextSingleQuestion();
+        }, 700);
+      }
+    });
+
+    $("quitSingle").addEventListener("click", () => {
+      if (confirm("End this session and view your results?")) {
+        endSingleSession("Session ended early");
+      }
+    });
+
+    function endSingleSession(reason) {
+      if (!screens.singleGame.classList.contains("active")) return;
+      if (timerHandle) {
+        clearInterval(timerHandle);
+        timerHandle = null;
+      }
+
+      const elapsed = Math.min(
+        performance.now() - state.single.startedAt,
+        state.single.durationMs
+      );
+
+      showSingleSummary(reason, elapsed);
+    }
+
+    /* ------------------------------------------------------------
+       Single-player analytics.
+       ------------------------------------------------------------ */
+    function showSingleSummary(reason, elapsedMs) {
+      const records = state.single.records;
+      const correct = records.filter(r => r.result === "correct").length;
+      const accuracy = records.length ? correct / records.length * 100 : 0;
+      const longest = longestRecord(records);
+      const longestAvg = longestAverageQuestion(records);
+      const trend = getTrend(records.map(r => r.timeMs));
+
+      $("summaryTitle").textContent = "Single-player results";
+      $("summarySubtitle").textContent =
+        `${reason} • Active session time: ${formatSeconds(elapsedMs)}`;
+
+      const firstHalf = records.slice(0, Math.ceil(records.length / 2));
+      const secondHalf = records.slice(Math.ceil(records.length / 2));
+
+      $("summaryContent").innerHTML = `
+        <div class="metric-grid">
+          <div class="metric"><span>Questions attempted</span><strong>${records.length}</strong></div>
+          <div class="metric"><span>Correct answers</span><strong>${correct}</strong></div>
+          <div class="metric"><span>Accuracy</span><strong>${formatPercent(accuracy)}</strong></div>
+          <div class="metric"><span>Avg. response</span><strong>${formatSeconds(average(records.map(r => r.timeMs)))}</strong></div>
+        </div>
+
+        <div class="analytics-grid">
+          <article class="analytics-card">
+            <h3>Longest single response</h3>
+            <p class="insight">
+              ${longest
+                ? `<strong>${longest.a} × ${longest.b}</strong> took <strong>${formatSeconds(longest.timeMs)}</strong>.`
+                : "No completed questions."}
+            </p>
+          </article>
+
+          <article class="analytics-card">
+            <h3>Longest average question</h3>
+            <p class="insight">
+              ${longestAvg
+                ? `<strong>${longestAvg.question}</strong> averaged
+                   <strong>${formatSeconds(longestAvg.averageMs)}</strong>
+                   across ${longestAvg.count} attempt(s).`
+                : "No completed questions."}
+            </p>
+          </article>
+
+          <article class="analytics-card full">
+            <h3>Speed trend</h3>
+            <p class="insight">
+              <strong>${trend}</strong>.
+              First-half average:
+              <strong>${formatSeconds(average(firstHalf.map(r => r.timeMs)))}</strong>.
+              Second-half average:
+              <strong>${formatSeconds(average(secondHalf.map(r => r.timeMs)))}</strong>.
+            </p>
+          </article>
+
+          <article class="analytics-card full">
+            <h3>Question log</h3>
+            ${renderRecordTable(records)}
+          </article>
+        </div>
+      `;
+
+      setScreen(screens.summary);
+    }
+
+    function renderRecordTable(records) {
+      if (!records.length) return `<div class="empty">No completed questions to display.</div>`;
+
+      return `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>#</th><th>Question</th><th>Time</th><th>Attempts</th><th>Result</th></tr>
+            </thead>
+            <tbody>
+              ${records.map((r, i) => `
+                <tr>
+                  <td>${i + 1}</td>
+                  <td>${r.a} × ${r.b}</td>
+                  <td>${formatSeconds(r.timeMs)}</td>
+                  <td>${r.attempts}</td>
+                  <td>${r.result === "correct" ? "Correct" : "Incorrect"}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    /* ------------------------------------------------------------
+       Multiplayer setup.
+       ------------------------------------------------------------ */
+    function selectedPlayersFromUI() {
+      const ids = [...$("playerList").querySelectorAll("input:checked")]
+        .map(input => Number(input.value));
+      return PLAYER_PROFILES.filter(player => ids.includes(player.id));
+    }
+
+    function startMultiMatch() {
+      const selectedPlayers = selectedPlayersFromUI();
+      const count = Number($("questionsPerPlayer").value);
+
+      if (!selectedPlayers.length) {
+        alert("Select at least one competitor.");
+        return;
+      }
+
+      if (!Number.isInteger(count) || count < 1 || count > 100) {
+        alert("Questions per player must be a whole number from 1 to 100.");
+        return;
+      }
+
+      state.multi.questionsPerPlayer = count;
+      state.multi.players = selectedPlayers.map(player => ({
+        ...player,
+        startedAt: 0,
+        totalActiveMs: 0,
+        questionIndex: 0,
+        score: 0,
+        records: [],
+        current: null,
+        attempt: 0,
+        questionStartedAt: 0
+      }));
+      state.multi.playerIndex = 0;
+
+      showReadyScreen();
+    }
+
+    function showReadyScreen() {
+      if (state.multi.playerIndex >= state.multi.players.length) {
+        showMultiSummary();
+        return;
+      }
+
+      const player = state.multi.players[state.multi.playerIndex];
+
+      setAccent(player.themeColor);
+      $("readyAvatar").textContent = initials(player.name);
+      $("readyAvatar").style.background = player.themeColor;
+      $("readyPlayerName").textContent = player.name;
+      $("readyProgress").textContent =
+        `Player ${state.multi.playerIndex + 1} of ${state.multi.players.length}`;
+
+      $("startTurn").textContent = `Start ${player.name}'s Turn`;
+      setScreen(screens.multiReady);
+    }
+
+    $("startTurn").addEventListener("click", () => {
+      startPlayerTurn();
+    });
+
+    function startPlayerTurn() {
+      const player = state.multi.players[state.multi.playerIndex];
+      if (!player) return;
+
+      // Each "turn" now consists of exactly ONE question.
+      // The next player gets the device immediately after this question,
+      // with an interstitial so the physical handoff is never timed.
+      player.startedAt = performance.now();
+      player.questionStartedAt = performance.now();
+
+      setScreen(screens.multiGame);
+      nextMultiQuestion();
+
+      if (timerHandle) clearInterval(timerHandle);
+      timerHandle = setInterval(updateMultiClock, 50);
+    }
+
+    function updateMultiClock() {
+      const player = state.multi.players[state.multi.playerIndex];
+      if (!player || !player.startedAt) return;
+
+      // Total active time includes all of this player's question periods.
+      const currentQuestionElapsed = player.questionStartedAt
+        ? performance.now() - player.questionStartedAt
+        : 0;
+
+      $("multiElapsed").textContent =
+        formatSeconds(player.totalActiveMs + currentQuestionElapsed);
+    }
+
+    function nextMultiQuestion() {
+      const player = state.multi.players[state.multi.playerIndex];
+
+      if (!player || player.questionIndex >= state.multi.questionsPerPlayer) {
+        finishCurrentPlayerOrAdvance();
+        return;
+      }
+
+      player.current = newQuestion(state.multi.selectedTables);
+      player.attempt = 1;
+      player.questionStartedAt = performance.now();
+
+      $("multiCurrentPlayer").textContent = player.name;
+      $("multiQuestionNumber").textContent =
+        `Question ${player.questionIndex + 1} of ${state.multi.questionsPerPlayer}`;
+      $("multiProgressText").textContent =
+        `${player.questionIndex} / ${state.multi.questionsPerPlayer}`;
+      $("multiProgress").style.width =
+        `${player.questionIndex / state.multi.questionsPerPlayer * 100}%`;
+      $("multiQuestion").textContent = `${player.current.a} × ${player.current.b}`;
+      $("multiAnswer").value = "";
+      $("multiFeedback").textContent = "";
+      $("multiFeedback").className = "feedback";
+
+      requestAnimationFrame(() => $("multiAnswer").focus());
+    }
+
+    $("multiAnswerForm").addEventListener("submit", (event) => {
+      event.preventDefault();
+
+      const player = state.multi.players[state.multi.playerIndex];
+      if (!player || !screens.multiGame.classList.contains("active")) return;
+
+      const input = $("multiAnswer");
+      const value = input.value.trim();
+
+      if (!/^\d+$/.test(value)) {
+        $("multiFeedback").textContent = "Enter a number.";
+        $("multiFeedback").className = "feedback incorrect";
+        input.focus();
+        return;
+      }
+
+      const answer = Number(value);
+      const elapsed = performance.now() - player.questionStartedAt;
+      const correct = answer === player.current.answer;
+
+      if (correct) {
+        player.score += 1;
+        player.records.push({
+          a: player.current.a,
+          b: player.current.b,
+          timeMs: elapsed,
+          result: "correct",
+          attempts: player.attempt
+        });
+        player.questionIndex += 1;
+        player.totalActiveMs += elapsed;
+
+        $("multiFeedback").textContent =
+          player.attempt === 1 ? "Correct! ✓" : "Correct on the second attempt! ✓";
+        $("multiFeedback").className = "feedback correct";
+
+        // End this player's active timing period and pass the device.
+        setTimeout(() => {
+          if (screens.multiGame.classList.contains("active")) finishQuestionAndPass();
+        }, 180);
+
+      } else if (player.attempt === 1) {
+        player.attempt = 2;
+        $("multiFeedback").textContent = "Incorrect! Try again.";
+        $("multiFeedback").className = "feedback incorrect";
+        input.value = "";
+        input.focus();
+
+      } else {
+        player.records.push({
+          a: player.current.a,
+          b: player.current.b,
+          timeMs: elapsed,
+          result: "incorrect",
+          attempts: 2
+        });
+        player.questionIndex += 1;
+        player.totalActiveMs += elapsed;
+
+        $("multiFeedback").textContent = `Answer: ${player.current.answer}`;
+        $("multiFeedback").className = "feedback reveal";
+
+        // The second incorrect attempt also ends the active question
+        // and immediately hands the device to the next player.
+        setTimeout(() => {
+          if (screens.multiGame.classList.contains("active")) finishQuestionAndPass();
+        }, 700);
+      }
+    });
+
+    function finishQuestionAndPass() {
+      const player = state.multi.players[state.multi.playerIndex];
+      if (!player) return;
+
+      if (timerHandle) {
+        clearInterval(timerHandle);
+        timerHandle = null;
+      }
+
+      // If this player has completed all assigned questions, their next
+      // scheduled slot is skipped. Otherwise they rejoin the rotation later.
+      advanceToNextActivePlayer();
+    }
+
+    function finishCurrentPlayerOrAdvance() {
+      // Kept as a safety guard for any future calls to nextMultiQuestion().
+      advanceToNextActivePlayer();
+    }
+
+    function advanceToNextActivePlayer() {
+      const totalPlayers = state.multi.players.length;
+
+      if (!totalPlayers) {
+        showMultiSummary();
+        return;
+      }
+
+      // Find the next player in circular order who still has questions.
+      for (let offset = 1; offset <= totalPlayers; offset++) {
+        const nextIndex = (state.multi.playerIndex + offset) % totalPlayers;
+        const candidate = state.multi.players[nextIndex];
+
+        if (candidate.questionIndex < state.multi.questionsPerPlayer) {
+          state.multi.playerIndex = nextIndex;
+          showReadyScreen();
+          return;
+        }
+      }
+
+      // No player has any remaining questions.
+      state.multi.players.forEach(player => {
+        if (player.startedAt && !player.totalActiveMs) {
+          player.totalActiveMs = player.records.reduce(
+            (sum, record) => sum + record.timeMs, 0
+          );
+        }
+      });
+
+      showMultiSummary();
+    }
+
+    $("quitMulti").addEventListener("click", () => {
+      if (!confirm("End the match now and view results?")) return;
+
+      const player = state.multi.players[state.multi.playerIndex];
+      if (player && player.questionStartedAt && screens.multiGame.classList.contains("active")) {
+        // Only add the active current-question period. Handoffs are not timed.
+        player.totalActiveMs += performance.now() - player.questionStartedAt;
+      }
+
+      if (timerHandle) {
+        clearInterval(timerHandle);
+        timerHandle = null;
+      }
+
+      showMultiSummary();
+    });
+
+    /* ------------------------------------------------------------
+       Multiplayer analytics and leaderboard.
+       ------------------------------------------------------------ */
+    function showMultiSummary() {
+      const players = state.multi.players;
+
+      const ranking = players.map((p) => ({
+        ...p,
+        accuracy: p.records.length ? p.score / p.records.length * 100 : 0,
+        avgMs: average(p.records.map(r => r.timeMs))
+      })).sort((a, b) => {
+        // Primary ranking: accuracy. Tie-breaker: lower active time.
+        return b.accuracy - a.accuracy || a.totalActiveMs - b.totalActiveMs;
+      });
+
+      const allRecords = players.flatMap(p =>
+        p.records.map(r => ({ ...r, player: p.name }))
+      );
+      const fastest = allRecords.reduce(
+        (best, r) => !best || r.timeMs < best.timeMs ? r : best, null
+      );
+      const hardest = allRecords.reduce(
+        (best, r) => !best || r.timeMs > best.timeMs ? r : best, null
+      );
+
+      $("summaryTitle").textContent = "Multiplayer results";
+      $("summarySubtitle").textContent =
+        `${players.length} player(s) • ${state.multi.questionsPerPlayer} question(s) per player`;
+
+      $("summaryContent").innerHTML = `
+        <div class="analytics-grid">
+          <article class="analytics-card full">
+            <h3>Leaderboard</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Rank</th><th>Player</th><th>Accuracy</th>
+                    <th>Correct</th><th>Avg. question</th><th>Total active time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${ranking.map((p, i) => `
+                    <tr>
+                      <td class="rank">#${i + 1}</td>
+                      <td><strong>${escapeHtml(p.name)}</strong></td>
+                      <td>${formatPercent(p.accuracy)}</td>
+                      <td>${p.score}/${p.records.length}</td>
+                      <td>${formatSeconds(p.avgMs)}</td>
+                      <td>${formatSeconds(p.totalActiveMs)}</td>
+                    </tr>
+                  `).join("")}
+                </tbody>
+              </table>
+            </div>
+            <p class="helper">
+              Ranking prioritizes accuracy; when accuracy is tied, lower total active
+              time ranks higher.
+            </p>
+          </article>
+
+          <article class="analytics-card">
+            <h3>Match fastest</h3>
+            <p class="insight">
+              ${fastest
+                ? `<strong>${escapeHtml(fastest.player)}</strong> answered
+                   <strong>${fastest.a} × ${fastest.b}</strong> in
+                   <strong>${formatSeconds(fastest.timeMs)}</strong>.`
+                : "No completed questions."}
+            </p>
+          </article>
+
+          <article class="analytics-card">
+            <h3>Hardest / longest</h3>
+            <p class="insight">
+              ${hardest
+                ? `<strong>${escapeHtml(hardest.player)}</strong> took
+                   <strong>${formatSeconds(hardest.timeMs)}</strong> on
+                   <strong>${hardest.a} × ${hardest.b}</strong>.`
+                : "No completed questions."}
+            </p>
+          </article>
+
+          <article class="analytics-card full">
+            <h3>Per-player performance</h3>
+            <div class="analytics-grid">
+              ${players.map(renderPlayerAnalytics).join("")}
+            </div>
+          </article>
+        </div>
+      `;
+
+      setScreen(screens.summary);
+      setAccent("#2563eb");
+    }
+
+    function renderPlayerAnalytics(player) {
+      const times = player.records.map(r => r.timeMs);
+      const longest = longestRecord(player.records);
+      const trend = getTrend(times);
+      const midpoint = Math.ceil(times.length / 2);
+      const firstHalf = times.slice(0, midpoint);
+      const secondHalf = times.slice(midpoint);
+      const accuracy = player.records.length
+        ? player.score / player.records.length * 100
+        : 0;
+
+      return `
+        <article class="analytics-card">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+            <span class="player-dot" style="background:${player.themeColor};width:18px;height:18px;"></span>
+            <h3 style="margin:0;">${escapeHtml(player.name)}</h3>
+          </div>
+
+          <div class="metric-grid">
+            <div class="metric"><span>Total time</span><strong>${formatSeconds(player.totalActiveMs)}</strong></div>
+            <div class="metric"><span>Accuracy</span><strong>${formatPercent(accuracy)}</strong></div>
+            <div class="metric"><span>Avg. question</span><strong>${formatSeconds(average(times))}</strong></div>
+            <div class="metric"><span>Correct</span><strong>${player.score}/${player.records.length}</strong></div>
+          </div>
+
+          <p class="helper">
+            Longest:
+            <strong>${longest
+              ? `${longest.a} × ${longest.b} — ${formatSeconds(longest.timeMs)}`
+              : "—"}</strong>
+          </p>
+
+          <p class="helper">
+            Speed trend: <strong>${trend}</strong>.
+            First half ${formatSeconds(average(firstHalf))};
+            second half ${formatSeconds(average(secondHalf))}.
+          </p>
+        </article>
+      `;
+    }
+
+    /* ------------------------------------------------------------
+       Restart.
+       ------------------------------------------------------------ */
+    $("restart").addEventListener("click", () => {
+      if (timerHandle) clearInterval(timerHandle);
+      timerHandle = null;
+
+      if (currentMode === "multi") {
+        setAccent("#2563eb");
+        setScreen(screens.multiSetup);
+      } else {
+        setAccent("#2563eb");
+        setScreen(screens.singleSetup);
+      }
+    });
+
+    /* ------------------------------------------------------------
+       Initialization.
+       ------------------------------------------------------------ */
+    renderTableSelectors("singleTables", state.single.selectedTables);
+    renderTableSelectors("multiTables", state.multi.selectedTables);
+    renderPlayers();
+
+    $("startSingle").addEventListener("click", startSingleSession);
+    $("startMulti").addEventListener("click", startMultiMatch);
+  </script>
+</body>
+</html>
