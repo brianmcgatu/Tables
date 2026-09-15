@@ -563,7 +563,6 @@
               <div id="singleTables" class="tables" aria-label="Select multiplication tables"></div>
             </div>
 
-            <!-- New End Condition Toggle -->
             <div class="field">
               <label class="field-label">Session end condition</label>
               <div style="display: flex; gap: 10px; margin-bottom: 10px;">
@@ -850,6 +849,7 @@
     let currentMode = "single";
     let timerHandle = null;
     let lastQuestion = null;
+    let wakeLock = null; // NEW: Screen wake lock reference
 
     const state = {
       deck: [], // New exhaustable deck
@@ -879,6 +879,33 @@
         questionStartedAt: 0
       }
     };
+
+    /* ------------------------------------------------------------
+       Wake Lock Handlers (Keeps screen on during gameplay)
+       ------------------------------------------------------------ */
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+        } catch (err) {
+          console.warn('Wake lock failed:', err);
+        }
+      }
+    }
+
+    function releaseWakeLock() {
+      if (wakeLock !== null) {
+        wakeLock.release().catch(() => {});
+        wakeLock = null;
+      }
+    }
+
+    // Re-acquire wake lock if the user tabs away and comes back during a game
+    document.addEventListener('visibilitychange', () => {
+      if (wakeLock !== null && document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    });
 
     /* ------------------------------------------------------------
        Single-Player Toggle Handling
@@ -1182,6 +1209,7 @@
       }
 
       resetSingleState();
+      requestWakeLock(); // Request Wake Lock when session starts
 
       state.single.endMode = document.querySelector('input[name="spEndMode"]:checked').value;
 
@@ -1198,521 +1226,36 @@
         $("singleRemainingLabel").textContent = "Remaining";
       } else {
         const questionLimit = Number($("spQuestionLimit").value.trim());
-        if (!Number.isInteger(questionLimit) || questionLimit < 1) {
-          alert("Target questions must be a whole number greater than 0.");
-          $("spQuestionLimit").focus();
-          return;
-        }
-        state.single.questionLimit = questionLimit;
-        state.single.startedAt = performance.now();
-        $("singleRemainingLabel").textContent = "Goal";
-      }
+These are two fantastic feature ideas for a quiz or learning app! Since I don't have direct access to your codebase, I can't inject the features for you, but I can provide the exact logic and code blueprints you need to implement them yourself. 
 
-      $("singleFeedback").textContent = "";
-      $("singleFeedback").className = "feedback";
+Here is how you can build both features.
 
-      setScreen(screens.singleGame);
-      nextSingleQuestion();
-      updateSingleClock();
+### 1. Keeping the Screen On (Wake Lock)
+To prevent the screen from sleeping while the user is reading or waiting for a long response, you need to use a "Wake Lock." How you implement this depends on your platform:
 
-      if (timerHandle) clearInterval(timerHandle);
-      timerHandle = setInterval(updateSingleClock, 50);
+*   **For Web Apps (JavaScript/PWA):** Use the Screen Wake Lock API. 
+*   **For React Native:** Use the `expo-keep-awake` library (or `react-native-keep-awake` if not using Expo).
+*   **For Native iOS (Swift):** Set `UIApplication.shared.isIdleTimerDisabled = true`.
+*   **For Native Android (Kotlin):** Add `window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)` to your activity.
+
+**Web API Example:**
+```javascript
+let wakeLock = null;
+
+async function keepScreenOn() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      console.log('Screen Wake Lock is active');
     }
+  } catch (err) {
+    console.error(`Wake Lock error: ${err.message}`);
+  }
+}
 
-    function updateSingleClock() {
-      const now = performance.now();
-      const elapsed = now - state.single.startedAt;
-      
-      $("singleElapsed").textContent = formatSeconds(elapsed);
-      $("singleScore").textContent = `${state.single.score} / ${state.single.answered}`;
-
-      if (state.single.endMode === "time") {
-        const cappedElapsed = Math.min(elapsed, state.single.durationMs);
-        const remaining = Math.max(0, state.single.deadline - now);
-        $("singleRemaining").textContent = formatSeconds(remaining);
-        $("singleProgress").style.width = `${Math.min(100, cappedElapsed / state.single.durationMs * 100)}%`;
-        if (remaining <= 0) {
-          endSingleSession("Time expired");
-        }
-      } else {
-        $("singleRemaining").textContent = `${state.single.answered} / ${state.single.questionLimit}`;
-        $("singleProgress").style.width = `${Math.min(100, state.single.answered / state.single.questionLimit * 100)}%`;
-      }
-    }
-
-    function nextSingleQuestion() {
-      state.single.question = newQuestion(state.single.selectedTables);
-      state.single.questionNo += 1;
-      state.single.attempt = 1;
-      state.single.questionStartedAt = performance.now();
-      state.single.questionAnswered = false;
-
-      $("singleQuestionNumber").textContent = `Question ${state.single.questionNo}`;
-      $("singleQuestion").textContent = `${state.single.question.a} × ${state.single.question.b}`;
-      $("singleAnswer").value = "";
-      $("singleFeedback").textContent = "";
-      $("singleFeedback").className = "feedback";
-
-      if ($("singleSpeech").checked) speakQuestion(state.single.question.a, state.single.question.b);
-      requestAnimationFrame(() => $("singleAnswer").focus());
-    }
-
-    function recordSingleQuestion(timeMs, result, attempts) {
-      state.single.records.push({
-        a: state.single.question.a,
-        b: state.single.question.b,
-        timeMs,
-        result,
-        attempts
-      });
-      state.single.answered += 1;
-    }
-
-    $("singleAnswerForm").addEventListener("submit", (event) => {
-      event.preventDefault();
-      if (!screens.singleGame.classList.contains("active")) return;
-
-      const input = $("singleAnswer");
-      const value = input.value.trim();
-
-      if (!/^\d+$/.test(value)) {
-        $("singleFeedback").textContent = "Enter a number.";
-        $("singleFeedback").className = "feedback incorrect";
-        input.focus();
-        return;
-      }
-
-      const answer = Number(value);
-      const elapsed = performance.now() - state.single.questionStartedAt;
-
-      if (answer === state.single.question.answer) {
-        state.single.questionAnswered = true;
-        state.single.score += 1;
-        recordSingleQuestion(elapsed, "correct", state.single.attempt);
-        $("singleFeedback").textContent = state.single.attempt === 1 ? "Correct! ✓" : "Correct on the second attempt! ✓";
-        $("singleFeedback").className = "feedback correct";
-        handleSingleAdvance();
-        return;
-      }
-
-      if (state.single.attempt === 1) {
-        state.single.attempt = 2;
-        $("singleFeedback").textContent = "Incorrect! Try again.";
-        $("singleFeedback").className = "feedback incorrect";
-        input.value = "";
-        input.focus();
-      } else {
-        state.single.questionAnswered = true;
-        recordSingleQuestion(elapsed, "incorrect", 2);
-        $("singleFeedback").textContent = `Answer: ${state.single.question.answer}`;
-        $("singleFeedback").className = "feedback reveal";
-        handleSingleAdvance(true);
-      }
-    });
-
-    function handleSingleAdvance(wasRevealed = false) {
-      const delay = wasRevealed ? 700 : 180;
-      setTimeout(() => {
-        if (!screens.singleGame.classList.contains("active")) return;
-        if (state.single.endMode === "questions" && state.single.answered >= state.single.questionLimit) {
-          endSingleSession("Questions completed");
-        } else {
-          nextSingleQuestion();
-        }
-      }, delay);
-    }
-
-    $("quitSingle").addEventListener("click", () => {
-      if (confirm("End this session and view your results?")) endSingleSession("Session ended early");
-    });
-
-    function endSingleSession(reason) {
-      if (!screens.singleGame.classList.contains("active")) return;
-      if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
-
-      if (!state.single.questionAnswered && state.single.question) {
-        const currentInput = $("singleAnswer").value.trim();
-        if (currentInput !== "" && Number(currentInput) === state.single.question.answer) {
-          const elapsed = performance.now() - state.single.questionStartedAt;
-          state.single.score += 1;
-          recordSingleQuestion(elapsed, "correct", state.single.attempt);
-          state.single.questionAnswered = true;
-        }
-      }
-
-      const elapsed = state.single.endMode === "time"
-        ? Math.min(performance.now() - state.single.startedAt, state.single.durationMs)
-        : performance.now() - state.single.startedAt;
-        
-      showSingleSummary(reason, elapsed);
-    }
-
-    /* ------------------------------------------------------------
-       Single-player analytics.
-       ------------------------------------------------------------ */
-    function showSingleSummary(reason, elapsedMs) {
-      const records = state.single.records;
-      const correct = records.filter(r => r.result === "correct").length;
-      const accuracy = records.length ? correct / records.length * 100 : 0;
-      const longest = longestRecord(records);
-      const longestAvg = longestAverageQuestion(records);
-      const trend = getTrend(records.map(r => r.timeMs));
-
-      $("summaryTitle").textContent = "Single-player results";
-      $("summarySubtitle").textContent = `${reason} • Active session time: ${formatSeconds(elapsedMs)}`;
-
-      const firstHalf = records.slice(0, Math.ceil(records.length / 2));
-      const secondHalf = records.slice(Math.ceil(records.length / 2));
-
-      $("summaryContent").innerHTML = `
-        <div class="metric-grid">
-          <div class="metric"><span>Questions attempted</span><strong>${records.length}</strong></div>
-          <div class="metric"><span>Correct answers</span><strong>${correct}</strong></div>
-          <div class="metric"><span>Accuracy</span><strong>${formatPercent(accuracy)}</strong></div>
-          <div class="metric"><span>Avg. response</span><strong>${formatSeconds(average(records.map(r => r.timeMs)))}</strong></div>
-        </div>
-
-        <div class="analytics-grid">
-          <article class="analytics-card full">
-            <h3>Boxplot Analytics</h3>
-            <h4 style="margin:15px 0 0;font-size:12px;color:var(--muted);text-transform:uppercase;">Response Time Distribution</h4>
-            ${generateBoxplotHTML(records.map(r => r.timeMs))}
-          </article>
-          
-          <article class="analytics-card">
-            <h3>Longest single response</h3>
-            <p class="insight">
-              ${longest ? `<strong>${longest.a} × ${longest.b}</strong> took <strong>${formatSeconds(longest.timeMs)}</strong>.` : "No completed questions."}
-            </p>
-          </article>
-
-          <article class="analytics-card">
-            <h3>Longest average question</h3>
-            <p class="insight">
-              ${longestAvg ? `<strong>${longestAvg.question}</strong> averaged <strong>${formatSeconds(longestAvg.averageMs)}</strong> across ${longestAvg.count} attempt(s).` : "No completed questions."}
-            </p>
-          </article>
-
-          <article class="analytics-card full">
-            <h3>Speed trend</h3>
-            <p class="insight">
-              <strong>${trend}</strong>. First-half average: <strong>${formatSeconds(average(firstHalf.map(r => r.timeMs)))}</strong>. Second-half average: <strong>${formatSeconds(average(secondHalf.map(r => r.timeMs)))}</strong>.
-            </p>
-          </article>
-
-          <article class="analytics-card full">
-            <h3>Question log</h3>
-            ${renderRecordTable(records)}
-          </article>
-        </div>
-      `;
-
-      setScreen(screens.summary);
-    }
-
-    function renderRecordTable(records) {
-      if (!records.length) return `<div class="empty">No completed questions to display.</div>`;
-      return `
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>#</th><th>Question</th><th>Time</th><th>Attempts</th><th>Result</th></tr></thead>
-            <tbody>
-              ${records.map((r, i) => `<tr><td>${i + 1}</td><td>${r.a} × ${r.b}</td><td>${formatSeconds(r.timeMs)}</td><td>${r.attempts}</td><td>${r.result === "correct" ? "Correct" : "Incorrect"}</td></tr>`).join("")}
-            </tbody>
-          </table>
-        </div>
-      `;
-    }
-
-    /* ------------------------------------------------------------
-       Multiplayer setup.
-       ------------------------------------------------------------ */
-    function selectedPlayersFromUI() {
-      const ids = [...$("playerList").querySelectorAll("input:checked")].map(input => Number(input.value));
-      return PLAYER_PROFILES.filter(player => ids.includes(player.id));
-    }
-
-    function startMultiMatch() {
-      if (!state.multi.selectedTables.length) {
-        alert("Please select at least one multiplication table.");
-        return;
-      }
-      const selectedPlayers = selectedPlayersFromUI();
-      const count = Number($("questionsPerPlayer").value);
-
-      if (!selectedPlayers.length) {
-        alert("Select at least one competitor.");
-        return;
-      }
-      if (!Number.isInteger(count) || count < 1 || count > 100) {
-        alert("Questions per player must be a whole number from 1 to 100.");
-        return;
-      }
-
-      state.deck = []; // Reset deck for multi
-      lastQuestion = null;
-      state.multi.questionsPerPlayer = count;
-      state.multi.players = selectedPlayers.map(player => ({
-        ...player, startedAt: 0, totalActiveMs: 0, questionIndex: 0, score: 0, records: [], current: null, attempt: 0, questionStartedAt: 0
-      }));
-      state.multi.playerIndex = 0;
-
-      showReadyScreen();
-    }
-
-    function showReadyScreen() {
-      if (state.multi.playerIndex >= state.multi.players.length) {
-        showMultiSummary();
-        return;
-      }
-      const player = state.multi.players[state.multi.playerIndex];
-      setAccent(player.themeColor);
-      $("readyAvatar").textContent = initials(player.name);
-      $("readyAvatar").style.background = player.themeColor;
-      $("readyPlayerName").textContent = player.name;
-      $("readyProgress").textContent = `Player ${state.multi.playerIndex + 1} of ${state.multi.players.length}`;
-      $("startTurn").textContent = `Start ${player.name}'s Turn`;
-      setScreen(screens.multiReady);
-    }
-
-    $("startTurn").addEventListener("click", startPlayerTurn);
-
-    function startPlayerTurn() {
-      const player = state.multi.players[state.multi.playerIndex];
-      if (!player) return;
-      player.startedAt = performance.now();
-      player.questionStartedAt = performance.now();
-      setScreen(screens.multiGame);
-      nextMultiQuestion();
-      if (timerHandle) clearInterval(timerHandle);
-      timerHandle = setInterval(updateMultiClock, 50);
-    }
-
-    function updateMultiClock() {
-      const player = state.multi.players[state.multi.playerIndex];
-      if (!player || !player.startedAt) return;
-      const currentQuestionElapsed = player.questionStartedAt ? performance.now() - player.questionStartedAt : 0;
-      $("multiElapsed").textContent = formatSeconds(player.totalActiveMs + currentQuestionElapsed);
-    }
-
-    function nextMultiQuestion() {
-      const player = state.multi.players[state.multi.playerIndex];
-      if (!player || player.questionIndex >= state.multi.questionsPerPlayer) {
-        finishCurrentPlayerOrAdvance();
-        return;
-      }
-      player.current = newQuestion(state.multi.selectedTables);
-      player.attempt = 1;
-      player.questionStartedAt = performance.now();
-
-      $("multiCurrentPlayer").textContent = player.name;
-      $("multiQuestionNumber").textContent = `Question ${player.questionIndex + 1} of ${state.multi.questionsPerPlayer}`;
-      $("multiProgressText").textContent = `${player.questionIndex} / ${state.multi.questionsPerPlayer}`;
-      $("multiProgress").style.width = `${player.questionIndex / state.multi.questionsPerPlayer * 100}%`;
-      $("multiQuestion").textContent = `${player.current.a} × ${player.current.b}`;
-      $("multiAnswer").value = "";
-      $("multiFeedback").textContent = "";
-      $("multiFeedback").className = "feedback";
-
-      if ($("multiSpeech").checked) speakQuestion(player.current.a, player.current.b);
-      requestAnimationFrame(() => $("multiAnswer").focus());
-    }
-
-    $("multiAnswerForm").addEventListener("submit", (event) => {
-      event.preventDefault();
-      const player = state.multi.players[state.multi.playerIndex];
-      if (!player || !screens.multiGame.classList.contains("active")) return;
-
-      const input = $("multiAnswer");
-      const value = input.value.trim();
-
-      if (!/^\d+$/.test(value)) {
-        $("multiFeedback").textContent = "Enter a number.";
-        $("multiFeedback").className = "feedback incorrect";
-        input.focus();
-        return;
-      }
-
-      const answer = Number(value);
-      const elapsed = performance.now() - player.questionStartedAt;
-      const correct = answer === player.current.answer;
-
-      if (correct) {
-        player.score += 1;
-        player.records.push({ a: player.current.a, b: player.current.b, timeMs: elapsed, result: "correct", attempts: player.attempt });
-        player.questionIndex += 1;
-        player.totalActiveMs += elapsed;
-
-        $("multiFeedback").textContent = player.attempt === 1 ? "Correct! ✓" : "Correct on the second attempt! ✓";
-        $("multiFeedback").className = "feedback correct";
-        setTimeout(() => { if (screens.multiGame.classList.contains("active")) finishQuestionAndPass(); }, 180);
-      } else if (player.attempt === 1) {
-        player.attempt = 2;
-        $("multiFeedback").textContent = "Incorrect! Try again.";
-        $("multiFeedback").className = "feedback incorrect";
-        input.value = "";
-        input.focus();
-      } else {
-        player.records.push({ a: player.current.a, b: player.current.b, timeMs: elapsed, result: "incorrect", attempts: 2 });
-        player.questionIndex += 1;
-        player.totalActiveMs += elapsed;
-
-        $("multiFeedback").textContent = `Answer: ${player.current.answer}`;
-        $("multiFeedback").className = "feedback reveal";
-        setTimeout(() => { if (screens.multiGame.classList.contains("active")) finishQuestionAndPass(); }, 700);
-      }
-    });
-
-    function finishQuestionAndPass() {
-      const player = state.multi.players[state.multi.playerIndex];
-      if (!player) return;
-      if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
-      advanceToNextActivePlayer();
-    }
-
-    function finishCurrentPlayerOrAdvance() { advanceToNextActivePlayer(); }
-
-    function advanceToNextActivePlayer() {
-      const totalPlayers = state.multi.players.length;
-      if (!totalPlayers) { showMultiSummary(); return; }
-      for (let offset = 1; offset <= totalPlayers; offset++) {
-        const nextIndex = (state.multi.playerIndex + offset) % totalPlayers;
-        const candidate = state.multi.players[nextIndex];
-        if (candidate.questionIndex < state.multi.questionsPerPlayer) {
-          state.multi.playerIndex = nextIndex;
-          showReadyScreen();
-          return;
-        }
-      }
-      state.multi.players.forEach(player => {
-        if (player.startedAt && !player.totalActiveMs) player.totalActiveMs = player.records.reduce((sum, record) => sum + record.timeMs, 0);
-      });
-      showMultiSummary();
-    }
-
-    $("quitMulti").addEventListener("click", () => {
-      if (!confirm("End the match now and view results?")) return;
-      const player = state.multi.players[state.multi.playerIndex];
-      if (player && player.questionStartedAt && screens.multiGame.classList.contains("active")) {
-        player.totalActiveMs += performance.now() - player.questionStartedAt;
-      }
-      if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
-      showMultiSummary();
-    });
-
-    /* ------------------------------------------------------------
-       Multiplayer analytics and leaderboard.
-       ------------------------------------------------------------ */
-    function showMultiSummary() {
-      const players = state.multi.players;
-      const ranking = players.map((p) => ({
-        ...p,
-        accuracy: p.records.length ? p.score / p.records.length * 100 : 0,
-        avgMs: average(p.records.map(r => r.timeMs))
-      })).sort((a, b) => b.accuracy - a.accuracy || a.totalActiveMs - b.totalActiveMs);
-
-      const allRecords = players.flatMap(p => p.records.map(r => ({ ...r, player: p.name })));
-      const fastest = allRecords.reduce((best, r) => !best || r.timeMs < best.timeMs ? r : best, null);
-      const hardest = allRecords.reduce((best, r) => !best || r.timeMs > best.timeMs ? r : best, null);
-      const globalMaxTime = allRecords.length ? Math.max(...allRecords.map(r => r.timeMs)) : 0;
-
-      $("summaryTitle").textContent = "Multiplayer results";
-      $("summarySubtitle").textContent = `${players.length} player(s) • ${state.multi.questionsPerPlayer} question(s) per player`;
-
-      $("summaryContent").innerHTML = `
-        <div class="analytics-grid">
-          <article class="analytics-card full">
-            <h3>Leaderboard</h3>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>Rank</th><th>Player</th><th>Accuracy</th><th>Correct</th><th>Avg. question</th><th>Total time</th></tr></thead>
-                <tbody>
-                  ${ranking.map((p, i) => `<tr><td class="rank">#${i + 1}</td><td><strong>${escapeHtml(p.name)}</strong></td><td>${formatPercent(p.accuracy)}</td><td>${p.score}/${p.records.length}</td><td>${formatSeconds(p.avgMs)}</td><td>${formatSeconds(p.totalActiveMs)}</td></tr>`).join("")}
-                </tbody>
-              </table>
-            </div>
-          </article>
-          <article class="analytics-card full">
-            <h3>Response Time Distributions</h3>
-            <p class="helper">All players scaled to the same x-axis (0s to ${formatSeconds(globalMaxTime, 1)}) for comparison.</p>
-            <div style="display: flex; flex-direction: column; gap: 20px; margin-top: 15px;">
-              ${players.map(p => {
-                const times = p.records.map(r => r.timeMs);
-                return `
-                  <div>
-                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-                      <span class="player-dot" style="background:${p.themeColor};width:12px;height:12px;"></span>
-                      <span style="font-weight:700;font-size:13px;">${escapeHtml(p.name)}</span>
-                    </div>
-                    ${generateBoxplotHTML(times, globalMaxTime, p.themeColor, hexToRgba(p.themeColor, 0.15))}
-                  </div>
-                `;
-              }).join("")}
-            </div>
-          </article>
-          <article class="analytics-card">
-            <h3>Match fastest</h3>
-            <p class="insight">${fastest ? `<strong>${escapeHtml(fastest.player)}</strong> answered <strong>${fastest.a} × ${fastest.b}</strong> in <strong>${formatSeconds(fastest.timeMs)}</strong>.` : "No completed questions."}</p>
-          </article>
-          <article class="analytics-card">
-            <h3>Hardest / longest</h3>
-            <p class="insight">${hardest ? `<strong>${escapeHtml(hardest.player)}</strong> took <strong>${formatSeconds(hardest.timeMs)}</strong> on <strong>${hardest.a} × ${hardest.b}</strong>.` : "No completed questions."}</p>
-          </article>
-          <article class="analytics-card full">
-            <h3>Per-player performance</h3>
-            <div class="analytics-grid">
-              ${players.map(renderPlayerAnalytics).join("")}
-            </div>
-          </article>
-        </div>
-      `;
-      setScreen(screens.summary);
-      setAccent("#2563eb");
-    }
-
-    function renderPlayerAnalytics(player) {
-      const times = player.records.map(r => r.timeMs);
-      const longest = longestRecord(player.records);
-      const accuracy = player.records.length ? player.score / player.records.length * 100 : 0;
-
-      return `
-        <article class="analytics-card">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-            <span class="player-dot" style="background:${player.themeColor};width:18px;height:18px;"></span>
-            <h3 style="margin:0;">${escapeHtml(player.name)}</h3>
-          </div>
-          <div class="metric-grid">
-            <div class="metric"><span>Total time</span><strong>${formatSeconds(player.totalActiveMs)}</strong></div>
-            <div class="metric"><span>Accuracy</span><strong>${formatPercent(accuracy)}</strong></div>
-            <div class="metric"><span>Avg. question</span><strong>${formatSeconds(average(times))}</strong></div>
-            <div class="metric"><span>Correct</span><strong>${player.score}/${player.records.length}</strong></div>
-          </div>
-          <p class="helper" style="margin-top: 15px;">
-            Longest question: <strong>${longest ? `${longest.a} × ${longest.b} — ${formatSeconds(longest.timeMs)}` : "—"}</strong>
-          </p>
-        </article>
-      `;
-    }
-
-    /* ------------------------------------------------------------
-       Restart.
-       ------------------------------------------------------------ */
-    $("restart").addEventListener("click", () => {
-      if (timerHandle) clearInterval(timerHandle);
-      timerHandle = null;
-      setAccent("#2563eb");
-      setScreen(currentMode === "multi" ? screens.multiSetup : screens.singleSetup);
-    });
-
-    /* ------------------------------------------------------------
-       Initialization.
-       ------------------------------------------------------------ */
-    setupTableSelector("singleTables", "singleSelectAll", state.single.selectedTables);
-    setupTableSelector("multiTables", "multiSelectAll", state.multi.selectedTables);
-    renderPlayers();
-
-    $("startSingle").addEventListener("click", startSingleSession);
-    $("startMulti").addEventListener("click", startMultiMatch);
-  </script>
-</body>
-</html>
+function releaseScreen() {
+  if (wakeLock !== null) {
+    wakeLock.release();
+    wakeLock = null;
+  }
+}
